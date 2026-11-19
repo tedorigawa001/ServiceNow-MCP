@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.17 / Date: 2026-11-19。
+Version: release-ap01-limited-scope-draft-0.18 / Date: 2026-11-19。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -112,7 +112,7 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 
 ## 13 個別承認用の残差台帳（draft-0.8）
 
-[未レビュー／重複・通常維持・個別残差台帳draft-0.9](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)の初稿で、正規228行と6レビューの延べ123行・重複除外119旧caseを文書上で照合した。閉鎖lane候補158行の専用行なし44、入口7行の専用行なし3、通常維持SP25、別gateのUN62を分離し、全caseレビュー完了・移行率にはしない。draft-0.2でSA-02〜04を追加専用行に個別照合し、その時点の文書対応122・閉鎖lane残未レビュー41を記録した。draft-0.3でSA-06〜08のff／完全親のforeign sys_id／余剰scriptを追加し、6レビュー基準は変えず追加6・その時点の文書対応125・閉鎖lane残未レビュー38を記録した。元3variantの直接assertはinvalid_response拒否と別freshのcleanup=closedで、元失敗runのcleanup完了・診断保持・status操作0を実測した扱いにはしない。拒否位置の静的根拠と、別Dの会計／非露出assert・既存compiled fixtureの未収録variantを分ける。draft-0.4でSA-09〜14のprofile値／余剰field拒否6variantを追加し、追加12・当時の文書対応131・閉鎖lane残未レビュー32を別集計する。直接assertはinvalid_inputのrejectだけで、friend呼出し前という拒否位置は静的根拠として分け、HTTP到着後のnative分類やDの余剰field／live session拒否と同等にしない。module評価時のfriend取得・保持は別段階で未撤去のままである。draft-0.5でSA-15〜24（fixed-200 guard、親bytes copy、status delay中／事前の取消、bytes／request上限、元floor、低減deadline）を追加し、追加22・当時の文書対応141・閉鎖lane残未レビュー22を別集計する。直接assertはcode・timer0等に限られ、停止位置・dispatch数・予約数は静的根拠として分け、Dの会計／予約peakの強いassertを元の保証に加算しない。以前の403/404 no_body返値5項目・実prototype4method非再入、ff／foreign／余剰scriptのレビューも保持。重複4旧case・KP01〜05・処遇未選択／未承認は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持し、編集はMDだけで実装・Pushは行わない。
+[未レビュー／重複・通常維持・個別残差台帳draft-0.10](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)の初稿で、正規228行と6レビューの延べ123行・重複除外119旧caseを文書上で照合した。閉鎖lane候補158行の専用行なし44、入口7行の専用行なし3、通常維持SP25、別gateのUN62を分離し、全caseレビュー完了・移行率にはしない。draft-0.2でSA-02〜04を追加専用行に個別照合し、その時点の文書対応122・閉鎖lane残未レビュー41を記録した。draft-0.3でSA-06〜08のff／完全親のforeign sys_id／余剰scriptを追加し、6レビュー基準は変えず追加6・その時点の文書対応125・閉鎖lane残未レビュー38を記録した。元3variantの直接assertはinvalid_response拒否と別freshのcleanup=closedで、元失敗runのcleanup完了・診断保持・status操作0を実測した扱いにはしない。拒否位置の静的根拠と、別Dの会計／非露出assert・既存compiled fixtureの未収録variantを分ける。draft-0.4でSA-09〜14のprofile値／余剰field拒否6variantを追加し、追加12・当時の文書対応131・閉鎖lane残未レビュー32を別集計する。直接assertはinvalid_inputのrejectだけで、friend呼出し前という拒否位置は静的根拠として分け、HTTP到着後のnative分類やDの余剰field／live session拒否と同等にしない。module評価時のfriend取得・保持は別段階で未撤去のままである。draft-0.5でSA-15〜24（fixed-200 guard、親bytes copy、status delay中／事前の取消、bytes／request上限、元floor、低減deadline）を追加し、追加22・当時の文書対応141・閉鎖lane残未レビュー22を別集計する。直接assertはcode・timer0等に限られ、停止位置・dispatch数・予約数は静的根拠として分け、Dの会計／予約peakの強いassertを元の保証に加算しない。以前の403/404 no_body返値5項目・実prototype4method非再入、ff／foreign／余剰scriptのレビューも保持。重複4旧case・KP01〜05・処遇未選択／未承認は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持し、編集はMDだけで実装・Pushは行わない。
 
 draft-0.6ではND-03〜06の403／404×body有無を、旧nativeの発行・消費試行・消費、cleanup種別、上位の未観測HTTP欄とrun内部理由の直接assertionに対応付けた。「公開release判断なし」というテスト名だけでは返値の不在検査とせず、別compiled fixture・独立Dの保証を分離する。正常404/bodyありはDで未代替のまま。当時の文書対応145、閉鎖lane未レビュー18で、入口未照合3と別gate UN62は不変。各処遇・承認・通常経路維持条件は変更しない。
 
@@ -120,7 +120,9 @@ draft-0.7ではND-09〜12の低減bytes上限とrequest cap4／5を個別照合�
 
 draft-0.8ではND-13〜15の単一ff、resultを持たないJSON空オブジェクト、foreign IDと4必須列不足が重なる親を個別照合した。元の直接assertionはinvalid_response・上位release.http=null・sessionのstatus消費0。decode／schemaでの停止と、移行候補の操作数や親消費の検査を混同しない。当時の文書対応152、閉鎖lane未レビュー11。入口未照合3・別gate UN62の件数、旧分類・処遇未選択・承認状態は維持する。
 
-draft-0.9ではND-17の事前取消とND-20の同Response再利用を個別照合した。事前取消は一時確保後のfactory停止であって無割当てではなく、再利用拒否は二度目の実class runのnative header段階であって入口拒否ではない。元のtimer0／後続fresh成功・発行0／先行JSON不変と、Dの別root／deliveryの検査を分ける。文書対応154、閉鎖lane未レビュー9。入口未照合3・別gate UN62の件数、旧分類・処遇未選択・承認状態は維持する。
+draft-0.9ではND-17の事前取消とND-20の同Response再利用を個別照合した。事前取消は一時確保後のfactory停止であって無割当てではなく、再利用拒否は二度目の実class runのnative header段階であって入口拒否ではない。元のtimer0／後続fresh成功・発行0／先行JSON不変と、Dの別root／deliveryの検査を分ける。当時の文書対応154、閉鎖lane未レビュー9。入口未照合3・別gate UN62の件数、旧分類・処遇未選択・承認状態は維持する。
+
+draft-0.10ではND-21〜26のcaller供給拒否を個別照合した。各直接assertionは`invalid_input`のPromise拒否で、親bytes copy・固定driver組立て・friend呼出しより前に止まることは静的根拠として分ける。DN-14は別profileのcleanup申告拒否で、旧入口とは非同等（部分対応1・未対応5）。通常sessionのfetch注入は維持し、入口撤去後の不在検査を元の拒否の代替にしない。文書対応160、閉鎖lane未レビュー3（ND-27〜29）。入口未照合3・別gate UN62、旧分類・処遇未選択・承認状態は不変。製品実装・試験・設定は変更しない。
 
 ## 14 AP02／AP03の撤去・互換性の承認材料（draft-0.13）
 

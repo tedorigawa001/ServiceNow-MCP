@@ -1,6 +1,6 @@
 # AP01：個別承認用の残差台帳・未レビュー／重複と通常経路の維持条件
 
-Version: release-ap01-individual-approval-residual-ledger-draft-0.9 / Date: 2026-11-19。
+Version: release-ap01-individual-approval-residual-ledger-draft-0.10 / Date: 2026-11-19。
 Status: **個別承認の材料。公開方針だけ採用済みで、保証低下の受容は全件未承認・処遇未選択。** 基準HEADは`5dec892`。[AP01親文書](BEST_PRACTICE_RELEASE_AP01_LIMITED_SCOPE_DESIGN.md)の①審査対象／範囲、②通常経路の維持、③失われ得るassertionと回復責務を一体で整理する。文書完成・明示対応・旧試験の存在を、保証回復や承認可能との判定にしない。
 
 draft-0.2の個別照合基準は`ff18189`。初稿の44行索引からSA-02〜04を本書の追加専用行A1-S01〜03へ対応付け、その時点の文書対応122・閉鎖laneの残未レビュー41を記録した。draft-0.3は`2f8d3f0`を基準にSA-06〜08をA1-S04〜06へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加6を含む文書対応125・閉鎖laneの残未レビュー38を記録した。draft-0.4は`6c6123e`を基準にSA-09〜14をA1-S07〜12へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加12を含む文書対応131・閉鎖laneの残未レビュー32を記録した。draft-0.5は`8e8dbdf`を基準にSA-15〜24をA1-S13〜22へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加22を含む当時の文書対応141・閉鎖laneの残未レビュー22を別集計する。追加22行の旧case分類は部分対応18（SA-02〜04・06〜08・11・12・15〜24）／未対応4（SA-09・10・13・14）のままで、保証回復・実行同等性・個別承認は追加しない。
@@ -11,7 +11,9 @@ draft-0.7は同基準のND-09〜12をA1-S27〜30へ追加した。当時は本�
 
 draft-0.8は同基準のND-13〜15をA1-S31〜33へ追加した。当時は本書追加33（部分対応29／未対応4）、文書対応152、閉鎖lane未レビュー11。入口3・別gate UN62と区別し、旧分類・処遇・承認状態は変更しない。
 
-draft-0.9は同基準のND-17／20をA1-S34〜35へ追加した。現在は本書追加35（部分対応31／未対応4）、現文書対応154、閉鎖lane未レビュー9。入口3・別gate UN62と区別し、旧分類・処遇・承認状態は変更しない。
+draft-0.9は同基準のND-17／20をA1-S34〜35へ追加した。当時は本書追加35（部分対応31／未対応4）、文書対応154、閉鎖lane未レビュー9。入口3・別gate UN62と区別し、旧分類・処遇・承認状態は変更しない。
+
+draft-0.10は`cafe86e`を基準にND-21〜26をA1-S36〜41へ追加した。現在は本書追加41（部分対応32／未対応9）、現文書対応160、閉鎖lane未レビュー3。入口3・別gate UN62と区別し、旧分類・処遇・承認状態は変更しない。
 
 保証低下・旧試験削除／skip／期待値弱化・friend撤去・設定変更・公開は未承認。正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較childの60秒・製品全体60秒・元attempt floorも変更しない。今回はMDと親文書参照だけ。実装・発行／claim消費・試験再実行・build／pack・負荷採取・実接続・実通信・実機操作・コミット・Pushは行わない。
 
@@ -63,21 +65,21 @@ draft-0.9は同基準のND-17／20をA1-S34〜35へ追加した。現在は本�
 
 158＋7＋1＋62＝228、114＋4＋1＝119、44＋3＋62＝109。区分は[保証回復レビュー](BEST_PRACTICE_RELEASE_GUARANTEE_RECOVERY_SCOPE_REVIEW.md)MP01〜18／RV01〜14の責務分離に沿う本書の審査用索引で、元台帳分類を書き換えない。109全てをAP01未承認の同一理由にまとめず、44の個別照合不足と、3の入口審査不足、62の別gateを分ける。
 
-### 本書の追加個別照合を含む現在値（draft-0.9）
+### 本書の追加個別照合を含む現在値（draft-0.10）
 
 | 区分 | 正規行数 | 6レビュー基準 | 本書の追加対応（旧case重複なし） | 現文書対応／専用行なし |
 |---|---|---|---|---|
-| 閉鎖lane | 158 | 114 | SA-02〜04・06〜24／ND-03〜06・09〜15・17・20の35 | 149／9 |
+| 閉鎖lane | 158 | 114 | SA-02〜04・06〜24／ND-03〜06・09〜15・17・20〜26の41 | 155／3 |
 | 入口境界 | 7 | 4 | 0 | 4／3 |
 | 通常維持 | 1 | 1 | 0 | 1／0 |
 | 別gate UN | 62 | 0 | 0 | 0／62 |
-| 合計 | 228 | 119 | 35 | 154／74 |
+| 合計 | 228 | 119 | 41 | 160／68 |
 
-既存レビュー延べ123＋本書追加35＝158専用行、重複4旧caseを除き154。現在の74は9＋3＋62であり、全てをAP01の同じ未レビュー理由にまとめない。35行を個別照合しただけで、旧試験の実行・新旧同等性・保証低下受容を増やしたとは数えない。
+既存レビュー延べ123＋本書追加41＝164専用行、重複4旧caseを除き160。現在の68は3＋3＋62であり、全てをAP01の同じ未レビュー理由にまとめない。41行を個別照合しただけで、旧試験の実行・新旧同等性・保証低下受容を増やしたとは数えない。
 
-## 3 初稿の未レビュー44行の追跡：個別照合35・残9
+## 3 初稿の未レビュー44行の追跡：個別照合41・残3
 
-次表は初稿の44行とA1-U-IDを保持する追跡索引。A1-U01〜35は追加専用行A1-S01〜35で元test本文を個別照合した。残るA1-U36〜44の9行（ND-21〜29）は正規台帳の**検査主題・残差の引継ぎだけ**で、直接assertion未個別照合のまま。全候補の処遇未選択・保証低下未承認は変わらない。未照合のcode・count・成功／拒否位置を主題から推測補完しない。元revision／fullName／variant・注入位置・直接assertion・診断層を個別票へ記録し、その後に同位置の独立対照か、失う範囲の受容可否を審査する。現在の試験は保持する。
+次表は初稿の44行とA1-U-IDを保持する追跡索引。A1-U01〜41は追加専用行A1-S01〜41で元test本文を個別照合した。残るA1-U42〜44の3行（ND-27〜29）は正規台帳の**検査主題・残差の引継ぎだけ**で、直接assertion未個別照合のまま。全候補の処遇未選択・保証低下未承認は変わらない。未照合のcode・count・成功／拒否位置を主題から推測補完しない。元revision／fullName／variant・注入位置・直接assertion・診断層を個別票へ記録し、その後に同位置の独立対照か、失う範囲の受容可否を審査する。現在の試験は保持する。
 
 責務先は**実装上のownerとレビュー引継先の役割**で、人名の割当て・実装依頼ではない。担当者・承認者・期限は未割当／未確定。通常の会計・停止・Permit等に関わる共通部分は§5の維持条件が優先する。
 
@@ -118,12 +120,12 @@ draft-0.9は同基準のND-17／20をA1-S34〜35へ追加した。現在は本�
 | A1-U33／[ND-15](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-15) | foreign sys_idかつ必須4列不足。元本文を個別照合済み（文書のみ） | A1-S33へ明示対応。同owner→NS01。schema拒否を完全な親行でのtarget不一致と同等にしない |
 | A1-U34／[ND-17](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-17) | 事前取消・native=null・会計／timerと後続fresh成功。元本文を個別照合済み（文書のみ） | A1-S34へ明示対応。constructor／run停止owner→NS01／03。factoryのcommit段階での停止と、一時確保なし／直接の枠計測を混同しない |
 | A1-U35／[ND-20](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-20) | 実classの別run間で同Responseを再利用拒否。元本文を個別照合済み（文書のみ） | A1-S35へ明示対応。native identity台帳→NS01／03。Dのdelivery再投入や別Response・同stream拒否で先行履歴の検査を代替しない |
-| A1-U36／[ND-21](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-21) | caller session supply拒否 | native固定入口→NS01／AP03。同field・同入口・副作用位置を確定 |
-| A1-U37／[ND-22](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-22) | caller consumer supply拒否 | 同入口→NS01／AP03。session供給と別variantで保持 |
-| A1-U38／[ND-23](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-23) | caller driver supply拒否 | 同入口→NS01／AP03。Dの固定schemaの存在だけで完了としない |
-| A1-U39／[ND-24](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-24) | caller cleanup supply拒否 | native入力／cleanup owner→NS01／03。同caller入口と別profile申告拒否を分離 |
-| A1-U40／[ND-25](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-25) | caller binding supply拒否 | native固定入口→NS01／AP03。同fieldでの私有binding非採用を確定 |
-| A1-U41／[ND-26](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-26) | caller fetch supply拒否 | 同入口→NS01／AP03。通常fetch注入の維持と混同しない |
+| A1-U36／[ND-21](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-21) | caller session供給拒否。元本文を個別照合済み（文書のみ） | A1-S36へ明示対応。wrapper入力→NS01／AP03。既存sessionを採らないこととfresh実classの同一性保証を区別 |
+| A1-U37／[ND-22](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-22) | caller consumer供給拒否。元本文を個別照合済み（文書のみ） | A1-S37へ明示対応。wrapper入力→NS01／AP03。consumer値の拒否とprivate consumer一度限りの実行を区別 |
+| A1-U38／[ND-23](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-23) | caller driver供給拒否。元本文を個別照合済み（文書のみ） | A1-S38へ明示対応。wrapper入力→NS01／AP03。外部driver fieldの拒否と内部固定driverを区別 |
+| A1-U39／[ND-24](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-24) | caller cleanup供給拒否。元本文を個別照合済み（文書のみ） | A1-S39へ明示対応。wrapper入力／cleanup owner→NS01／03、互換はAP03。Dの別profile申告拒否と同一視しない |
+| A1-U40／[ND-25](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-25) | caller binding供給拒否。元本文を個別照合済み（文書のみ） | A1-S40へ明示対応。wrapper入力→NS01／AP03。外部binding fieldの拒否と正規source／core照合を区別 |
+| A1-U41／[ND-26](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-26) | caller fetch供給拒否。元本文を個別照合済み（文書のみ） | A1-S41へ明示対応。wrapper入力→NS01／AP03。通常fetch注入の維持と区別 |
 | A1-U42／[ND-27](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-27) | 凍結診断copy・live capability非出力 | 診断／construction copy owner→NS01／03。元recursive freeze／handle検査の範囲を確定し、全graph解放へ拡大しない |
 | A1-U43／[ND-28](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-28) | native accessorで親bytes copy、shadow getter非実行 | parent byte pin→NS01／02。Uint8Array.byteLength shadowとResponse／stream shadowを別入力として維持 |
 | A1-U44／[ND-29](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-29) | proxy／accessor入力・shared親storage拒否、例外非露出 | native入力pin／failure owner→NS01。元parent-storage全variantと診断層を確定 |
@@ -336,6 +338,25 @@ DN-13は[開発専用delivery](../tests/support/review/ef03/native.ts)で同Resp
 
 [旧compiled native fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)は通常受理・401故障・friend再取得拒否を検査するが、事前取消／二run間Response再利用は収録していない。2行とも部分対応・処遇未選択・受容未承認。回復案はNS01／03の責務で元入力・直接assertion・同owner境界を対応付け、必要ならfactoryの段階、admission／timer返却、二度目のreader未取得、先行診断保持を追加対照として別記する。通常K01〜05・旧試験を維持し、台帳共有や新friendを代替にしない。
 
+### ND-21〜26の追加個別照合（draft-0.10）
+
+基準`cafe86e`の[元P試験](../tests/review/native-session-composition.test.ts#L90)は、`rejects caller %s supply`の6 variant。`probe(undefined, { [key]: {} })`で、正常な合成per-user snapshot／固定target／親JSON bytesと既定のfresh `Response(null, { status: 403 })`を用意し、第3引数オブジェクトの最上位にown data propertyを1つ加える。各値は空オブジェクトで、実session・関数・cleanup証拠等を作って渡す試験ではない。唯一の直接assertionは各variantで **Promiseがrejectし、errorの`code`が`invalid_input`**。正常返却物・上位診断copy・error本文・操作／計数、getterやcallbackの非呼出しは直接検査しない。
+
+| ID／正規case・fullName | 注入する余剰field | 旧分類・移行候補との差と回復時に保つ境界 |
+|---|---|---|
+| A1-S36／[ND-21](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-21) <code>rejects caller session supply</code> | `session:{}` | 未対応。Dの固定schemaは、この旧入口でcaller `session` 値を採用しないことの対照ではない。外部sessionの入口拒否を元実constructorの同core／登録世代保証やDの別root成功と分ける |
+| A1-S37／[ND-22](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-22) <code>rejects caller consumer supply</code> | `consumer:{}` | 未対応。旧入口のcaller `consumer` を拒否しただけで、正規private consumerの呼出し回数や消費規則は検証していない。未採用の境界は正規consumer実行の対照と分ける |
+| A1-S38／[ND-23](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-23) <code>rejects caller driver supply</code> | `driver:{}` | 未対応。同入口のcaller `driver` 拒否は、Dの固定deliveryや旧内部固定driverの動作保証と別。親bytes copy／driver組立て前の入力拒否を別対照で保持する |
+| A1-S39／[ND-24](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-24) <code>rejects caller cleanup supply</code> | `cleanup:{}` | 部分対応：[DN-14](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dn-14)は独立Dの`native` profileに`cleanup:{ disposition:'confirmed' }`を追加しsummaryのcodeを検査する。旧probe第3引数の`cleanup:{}`に対するPromise拒否・後続処理に進まない境界と同等でない |
+| A1-S40／[ND-25](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-25) <code>rejects caller binding supply</code> | `binding:{}` | 未対応。同入口でcaller `binding` を拒否する対照なし。`same_core`／`same_source`の診断や、生成済みのforeign handle拒否を入口の代替にしない |
+| A1-S41／[ND-26](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-26) <code>rejects caller fetch supply</code> | `fetch:{}` | 未対応。同入口の`fetch:{}`拒否。SA-13の関数値や、通常sessionの`BoundedReadOptions.fetch`とは別。関数型fetchやglobal fetchの呼出し数は未assertで、通常fetch注入（KP05）は維持する |
+
+**停止位置（静的根拠）。** [旧native wrapper](../src/review/abort-scope-evidence-native-diagnostic.ts#L1648)は`raw`の型／Proxyを検査し、`data`でprototype・own keyとdescriptorを調べ、data値を私有の一時オブジェクトに写す。その後の固定許可key（`signal`／`limits`／`parent_bytes`／`response`）照合で6件とも弾かれ、同じ条件式の親のtyped-array型検査、native getterによる親bytes copy、driver組立て、`nativeCompositionProbe`呼出しの前に`invalid_input`で止まる。よってその呼出しの実session／source生成・native owner生成・Response取得／reader・会計・driverのclose／disposeには入らない。rawの検査やhelperによるbytes／Responseの準備自体は行われ、module評価時に行う`takeNativeStatusCompositionProbe()`も別段階。『無割当て』『friend未取得』『操作0／cleanup完了を直接assert』とは記録しない。
+
+[DN-14の元試験](../tests/review/development-native.test.ts#L92)はcleanup申告のほかraw／proxy／copyのdeliveryとgetterの混入を組にし、各`invalid_input`、getter読み取り0、正規deliveryの後続成功を検査する。[Dの固定profile](../tests/support/review/ef03/native.ts)は`target`／`parent_bytes`／`delivery`の3keyで、cleanup追加はdeliveryの取得／消費前に弾かれる。getter計数はgetter variant用であり、cleanup variantに旧Pの直接assertとして足さない。共通入口・同一コードの共有はない。[旧compiled fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)は正常受理／401故障／friend再取得拒否を持つが、6つの余剰fieldは収録していない。
+
+**回復条件・責務。** 元probe入力を維持するなら、wrapper owner／NS01（cleanupはNS03も）で同6入力と`invalid_input`のPromise拒否を個別に揃え、固定許可keyのみの合成正対照を置く。driver／constructor／nativeの未到達を主張するなら別の独立対照で観測し、元の直接assertに加算しない。入口を撤去する案では、AP02のartifact上の不在とAP03のimport／返却互換性を別判断し、失われる旧拒否を不在検査や他methodの同期throwで代替済みにしない。通常経路の維持は§5、旧試験の処遇はAP05の別承認。6行とも旧分類と処遇未選択・保証低下未承認を保持する。
+
 ### 未個別照合の入口3行と別gate62行
 
 | ID／対象 | 未レビューの検査主題・責務先 | 扱い |
@@ -376,7 +397,7 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 
 ## 6 明示対応済みcaseの残差・失われ得るassertionと責務先
 
-以下は専用case行への審査入口であり、6行を一括で受容する表ではない。6レビューの専用case行を本台帳の明細参照とし、原文を再copyして条件を二重管理しない。各旧case／assertionは当該行の元assertion列と将来条件を参照して個別票へ結合する。全行「旧試験維持／処遇未選択／保証低下未承認」。本書追加のSA-02〜04・06〜24／ND-03〜06・09〜15・17・20はA1-S01〜35を参照し、残未レビュー9行は§3で個別照合する。
+以下は専用case行への審査入口であり、6行を一括で受容する表ではない。6レビューの専用case行を本台帳の明細参照とし、原文を再copyして条件を二重管理しない。各旧case／assertionは当該行の元assertion列と将来条件を参照して個別票へ結合する。全行「旧試験維持／処遇未選択／保証低下未承認」。本書追加のSA-02〜04・06〜24／ND-03〜06・09〜15・17・20〜26はA1-S01〜41を参照し、残未レビュー3行は§3で個別照合する。
 
 | ID／NS・case参照 | 旧直接assertと連続保証の残差（区別して審査） | 責務先・将来回復条件 | 通常維持との境界 |
 |---|---|---|---|
@@ -401,13 +422,13 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 
 ## 7 個別票の固定項目・現在値
 
-個別票は文書dataであり、runtime証拠・claim・発行口ではない。A1-R／Uの要約から自動で「受容」を選択しない。NS専用行119＋本書追加35の計154旧caseにも、まだ人の個別承認はない。
+個別票は文書dataであり、runtime証拠・claim・発行口ではない。A1-R／Uの要約から自動で「受容」を選択しない。NS専用行119＋本書追加41の計160旧caseにも、まだ人の個別承認はない。
 
 | ID／欄 | 必須内容 | 現在値・未記入時の扱い |
 |---|---|---|
 | A1-P01 識別 | 正規旧ID・元revision／宣言テンプレート／入力variant、対象lane・artifact、assertion列の参照 | IDは§2〜4／6へ結合。実行fullName・fault位置を推測生成しない |
 | A1-P02 維持境界 | 該当K01〜05と共通source／owner・影響しない根拠 | 維持必須。影響不明はUnknownで審査保留 |
-| A1-P03 保証／喪失 | 旧testが直接assertするcode／count／shape／診断・故障位置、何を失い何は残るか | 明示対応caseは元レビュー列／追加専用行を参照。残未レビュー9＋入口3は本文個別照合待ち。喪失は将来変更時の可能性で現在の退行判定ではない |
+| A1-P03 保証／喪失 | 旧testが直接assertするcode／count／shape／診断・故障位置、何を失い何は残るか | 明示対応caseは元レビュー列／追加専用行を参照。残未レビュー3＋入口3は本文個別照合待ち。喪失は将来変更時の可能性で現在の退行判定ではない |
 | A1-P04 代替と残差 | 新case・共有部分・異なる入力／時点／owner・未代替assertion | 旧分類を維持。Dの成功数・似たcodeで同等としない |
 | A1-P05 所有／失敗 | 実装上owner、停止・未公開値・未確認cleanup／custody・診断の保持先 | §3／5／6の役割へ引継ぎ。人の担当者は未割当。全解放・実容量は未確認ならUnknown |
 | A1-P06 回復 | 同入力・同元位置・正負対照・元期限・source／compiled artifact・終了確認と再レビュー条件 | 将来条件だけ記載。未実施を成功へ変えない。新friend・台帳共有を回復口にしない |
@@ -421,7 +442,7 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 ## 8 優先順と停止条件
 
 1. §2の排他的区分と§5のK条件を先に確認し、非提供と通常維持を混ぜない。旧case・variant・artifactを固定して重複4行の両参照を保つ。
-2. §3の初稿44行のうちSA-02〜04・06〜24／ND-03〜06・09〜15・17・20を個別照合した文書記録として保持し、残9行（ND-21〜29）を個別に照合する。次はND-21〜26のcaller供給拒否を、fieldごとの直接assertion・入力拒否順序・移行候補との差に分ける。取消・元floor／予算・診断、native／bytes・再利用境界も元variantで照合する。入口3行はAP02／03の別票へ渡す。未レビューが残る行は未承認・審査保留のままとし、群全体の受容で覆わない。
+2. §3の初稿44行のうちSA-02〜04・06〜24／ND-03〜06・09〜15・17・20〜26を個別照合した文書記録として保持する。残3行（ND-27〜29）は、凍結診断copyとhandle非露出、親bytesのshadow getter、proxy／accessor／shared storageの3境界を元variantで個別に照合する。入口3行はAP02／03の別票へ渡す。未レビューが残る行は未承認・審査保留のままとし、群全体の受容で覆わない。
 3. 明示対応済みの各旧caseもA1-P01〜10へ結合し、通常維持への影響・失われ得る直接assert・残差所有と回復条件を確定する。追加条件F01〜05と別gateを、失う旧保証へ混入しない。
 4. 個別受容の可否はユーザーの別承認へ渡す。受容できなければ回復先行または候補リリース停止。旧試験削除・friend撤去・設定変更・実装・公開はここから開始しない。
 
@@ -429,7 +450,7 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 
 ## 9 今回の静的確認
 
-以下は初稿draft-0.1時の記録。追加個別照合の現在値・確認範囲は§2の追加表・§3のA1-S01〜35と末尾のdraft-0.9記録を参照する。draft-0.1〜0.8の件数は各時点の履歴として保持する。
+以下は初稿draft-0.1時の記録。追加個別照合の現在値・確認範囲は§2の追加表・§3のA1-S01〜41と末尾のdraft-0.10記録を参照する。draft-0.1〜0.9の件数は各時点の履歴として保持する。
 
 正規228行のanchorと、6レビューの専用case行の最初の正規旧caseリンクを照合した。本文参照・D候補リンク・同名だが別入力の行を重複として数えず、旧case IDをanchorから確定した。未レビュー表は旧台帳の主題と残差の索引で、44行の直接assertionレビュー完了ではない。実装・製品module import／実行・試験再実行・build／pack・発行・保証回復判定は行っていない。
 
@@ -488,3 +509,7 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 基準`efb740b`で事前取消の5直接assertionと二run間Response再利用の4直接assertion、factory経由の停止位置・旧native headerでの拒否位置、DN-12／13と別construction／compiled対照を照合した。先行draft-0.6〜0.8の未コミット差分を保持し、対象は同じAP01文書2件だけ。旧試験・閉鎖条件・処遇未選択・承認状態は維持。製品module import・試験再実行・build／pack・発行・コミット・Pushは行っていない。
 
 静的確認では、正規228行・重複除外119＋追加35＝154、残9／入口3／別gate62、2MDの表26・参照223・明示anchor136、差分空白とstage0を確認した。初回の補助検査は台帳の「二つ目」と親文書の「二度目」を取り違えて停止し、照合語を訂正して再確認した。製品・試験・設定の差分はない。
+
+### draft-0.10：ND-21〜26の個別本文照合（2026-11-19）
+
+基準`cafe86e`で元6入力・各1直接assertion、固定allowlistの停止位置、DN-14と別artifactの検査範囲を静的に照合した。確認対象はAP01の2MD、正規228行・重複除外119＋追加41＝160、閉鎖lane残3／入口3／別gate62。旧試験・閉鎖条件・処遇未選択・承認状態は維持。製品module import・試験再実行・build／pack・発行・コミット・Pushは行わない。
