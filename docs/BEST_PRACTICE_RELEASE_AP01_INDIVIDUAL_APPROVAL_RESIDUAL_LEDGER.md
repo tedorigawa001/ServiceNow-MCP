@@ -1,6 +1,6 @@
 # AP01：個別承認用の残差台帳・未レビュー／重複と通常経路の維持条件
 
-Version: release-ap01-individual-approval-residual-ledger-draft-0.13 / Date: 2026-11-19。
+Version: release-ap01-individual-approval-residual-ledger-draft-0.14 / Date: 2026-11-19。
 Status: **個別承認の材料。公開方針だけ採用済みで、保証低下の受容は全件未承認・処遇未選択。** 基準HEADは`5dec892`。[AP01親文書](BEST_PRACTICE_RELEASE_AP01_LIMITED_SCOPE_DESIGN.md)の①審査対象／範囲、②通常経路の維持、③失われ得るassertionと回復責務を一体で整理する。文書完成・明示対応・旧試験の存在を、保証回復や承認可能との判定にしない。
 
 draft-0.13のレビュー修正：レビュー修正の基準HEADは`923a69f`（修正時のHEADは`923a69f`）。draft-0.12の個別本文照合記録の文末を他の記録と同じ実施済みの否定形「行っていない」へ揃え、静的確認の用語「anchor参照」を従来の「明示anchor」へ統一した。値（表28・ローカル参照247・明示anchor151）、照合内容・件数・旧分類・処遇未選択・承認状態は変更しない。
@@ -19,7 +19,9 @@ draft-0.9は同基準のND-17／20をA1-S34〜35へ追加した。当時は本�
 
 draft-0.10は`cafe86e`を基準にND-21〜26をA1-S36〜41へ追加した。当時は本書追加41（部分対応32／未対応9）、文書対応160、閉鎖lane未レビュー3。入口3・別gate UN62と区別し、旧分類・処遇・承認状態は変更しない。
 
-draft-0.12は`47e5f3b`を基準にND-27〜29をA1-S42〜44へ追加した。現在は本書追加44（部分対応34／未対応10）、現文書対応163、閉鎖lane未レビュー0。入口3と別gate UN62は残り、旧分類・処遇・承認状態は変更しない。
+draft-0.12は`47e5f3b`を基準にND-27〜29をA1-S42〜44へ追加した。当時は本書追加44（部分対応34／未対応10）、文書対応163、閉鎖lane未レビュー0。当時は入口3と別gate UN62が残り、旧分類・処遇・承認状態は変更しない。
+
+draft-0.14は`c1f562b`を基準に入口境界のSA-25／26・ND-30をA1-X01〜03で個別照合した。本書追加は閉鎖lane 44（部分対応34／未対応10）と入口3（すべて未対応）の計47、現文書対応166。閉鎖lane158と入口7の専用行なしは各0、別gate UN62は従来どおり。入口3件の現行テストと将来の不在確認は非同等で、処遇未選択・承認状態は変更しない。
 
 保証低下・旧試験削除／skip／期待値弱化・friend撤去・設定変更・公開は未承認。正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較childの60秒・製品全体60秒・元attempt floorも変更しない。今回はMDと親文書参照だけ。実装・発行／claim消費・試験再実行・build／pack・負荷採取・実接続・実通信・実機操作・コミット・Pushは行わない。
 
@@ -71,21 +73,21 @@ draft-0.12は`47e5f3b`を基準にND-27〜29をA1-S42〜44へ追加した。現�
 
 158＋7＋1＋62＝228、114＋4＋1＝119、44＋3＋62＝109。区分は[保証回復レビュー](BEST_PRACTICE_RELEASE_GUARANTEE_RECOVERY_SCOPE_REVIEW.md)MP01〜18／RV01〜14の責務分離に沿う本書の審査用索引で、元台帳分類を書き換えない。109全てをAP01未承認の同一理由にまとめず、44の個別照合不足と、3の入口審査不足、62の別gateを分ける。
 
-### 本書の追加個別照合を含む現在値（draft-0.12）
+### 本書の追加個別照合を含む現在値（draft-0.14）
 
 | 区分 | 正規行数 | 6レビュー基準 | 本書の追加対応（旧case重複なし） | 現文書対応／専用行なし |
 |---|---|---|---|---|
 | 閉鎖lane | 158 | 114 | SA-02〜04・06〜24／ND-03〜06・09〜15・17・20〜29の44 | 158／0 |
-| 入口境界 | 7 | 4 | 0 | 4／3 |
+| 入口境界 | 7 | 4 | SA-25・26／ND-30の3 | 7／0 |
 | 通常維持 | 1 | 1 | 0 | 1／0 |
 | 別gate UN | 62 | 0 | 0 | 0／62 |
-| 合計 | 228 | 119 | 44 | 163／65 |
+| 合計 | 228 | 119 | 47 | 166／62 |
 
-既存レビュー延べ123＋本書追加44＝167専用行、重複4旧caseを除き163。現在の65は閉鎖lane 0＋入口3＋別gate62。閉鎖laneの元本文照合が揃っても、移行・保証回復・実行同等性・保証低下受容は完了しない。
+既存レビュー延べ123＋本書追加47＝170専用行、重複4旧caseを除き166。専用行なし62は全て別gate UN。閉鎖laneと入口境界の文書照合が揃っても、移行・保証回復・実行同等性・保証低下受容は完了しない。
 
 ## 3 初稿の未レビュー44行の追跡：個別照合44・残0
 
-次表は初稿の44行とA1-U-IDを保持する追跡索引。A1-U01〜44は追加専用行A1-S01〜44で元test本文を個別照合した。閉鎖lane158行の文書対応に欠落はないが、全候補の処遇未選択・保証低下未承認は変わらない。入口3行と別gate UN62は別表に保持する。個別票には元revision／fullName／variant・注入位置・直接assertion・診断層を結合し、同位置の独立対照か、失う範囲の受容可否を審査する。現在の試験は保持する。
+次表は初稿の44行とA1-U-IDを保持する追跡索引。A1-U01〜44は追加専用行A1-S01〜44で元test本文を個別照合した。閉鎖lane158行の文書対応に欠落はないが、全候補の処遇未選択・保証低下未承認は変わらない。入口の追加照合3行と別gate UN62は別表に保持する。個別票には元revision／fullName／variant・注入位置・直接assertion・診断層を結合し、同位置の独立対照か、失う範囲の受容可否を審査する。現在の試験は保持する。
 
 責務先は**実装上のownerとレビュー引継先の役割**で、人名の割当て・実装依頼ではない。担当者・承認者・期限は未割当／未確定。通常の会計・停止・Permit等に関わる共通部分は§5の維持条件が優先する。
 
@@ -385,13 +387,28 @@ ND-27は診断copy owner／NS01・03で同成功返値の指定8key・同再帰�
 
 [旧compiled fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)は正常受理時にpermission値がすべてfalseであることとJSONのPRIVATE文字列不在などを検査するが、ND-27の指定8key／再帰freeze、ND-28の親shadow、ND-29の不正入力3つは収録しない。分類（部分対応2・未対応1）、処遇未選択・保証低下未承認は維持する。
 
-### 未個別照合の入口3行と別gate62行
+### 入口境界の追加個別照合：SA-25／26・ND-30（draft-0.14）
 
-| ID／対象 | 未レビューの検査主題・責務先 | 扱い |
+基準`c1f562b`の[SA元試験](../tests/review/source-status-binding.test.ts)と[ND元試験](../tests/review/native-session-composition.test.ts)を照合した。3件とも正規台帳の分類は未対応。既存実sessionへの付与拒否と、module内部に残る2つの取得口の非露出／再取得拒否は別の保証である。
+
+| ID／正規case | 元testの入力・直接assertion | 残差と責務先 |
 |---|---|---|
-| A1-X01／[SA-25](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-25) | 既存sessionへ推測keyでconsumerを付けない。source生成→AP02／03 | 元assertionの処遇は未個別照合。撤去後の不在検査と現入口拒否を別実績にする |
-| A1-X02／[SA-26](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-26) | probeのruntime class非露出・friendの一度take。公開境界→AP02／05 | 保証低下・撤去・旧case削除は未承認 |
-| A1-X03／[ND-30](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-30) | native friendの一度take・runtime非露出。公開境界→AP02／05 | 新入口なし／閉包不在への意図的仕様変更を個別審査 |
+| A1-X01／[SA-25](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-25) | 通常の`new BoundedReadSession(snapshot())`を作り、①別の空objectをkey／sourceにした`claimPrivateCompositionSource`がfalse、②同sessionと有効なsource入力・空objectのkey付き第3引数（check／take／takeStatus／capture）で`new BoundedUpdateSetSource`が同期に`invalid_input`を含むerrorをthrow、③capture未呼出し、④sessionのrequests=0。finallyでsessionをcloseするが、その完了は直接assertしない | [DR-20](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dr-20)は別rootが既存実session等の持込みを拒否し、元session状態不変・登録0等を検査する差分参照。実source第3引数／claimの同位置を通らない。source生成・session owner→AP02／03（JS引数仕様）／05（旧試験の処遇） |
+| A1-X02／[SA-26](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-26) | SA probeを静的importした状態で①`Object.hasOwn(BoundedReadSession,'probeNewStatusAcceptance')`がfalse、②bounded-readを動的importして`takeStatusAcceptanceProbe()`を呼ぶと同期に`internal_review_error`を含むerrorをthrow。試験内で最初のtakeを直接assertしない | 代替caseなし。旧status取得口とclass非露出の対。公開境界／配布owner→AP02／05、名前付きimportの互換差はAP03 |
+| A1-X03／[ND-30](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-30) | ND probeを静的importした状態で①`Object.hasOwn(BoundedReadSession,'probeNativeStatusComposition')`がfalse、②bounded-readを動的importして`takeNativeStatusCompositionProbe()`を呼ぶと同期に`internal_review_error`を含むerrorをthrow。SAとは別slotで、試験内で最初のtakeを直接assertしない | 代替caseなし。旧native取得口とclass非露出の対。公開境界／配布owner→AP02／05、名前付きimportの互換差はAP03 |
+
+**停止位置・非露出の範囲。** SA-25の[session側claim](../src/servicenow/bounded-read.ts)は通常生成直後にcomposition keyがなくfalseを返し、`#compositionSource`の代入へ進まない。[source constructor](../src/review/bounded-source.ts)は`#session`の代入後、truthyなcreationのclaimで同期拒否し、callbackの採用・captureより前に止まる。これはコード上の位置であり、無割当て、全hook非呼出し、session全状態不変の直接assertionではない。元試験が観測するのはcapture未呼出しとrequests=0まで。
+
+SA-26／ND-30は、[SA wrapper](../src/review/abort-scope-evidence-source-status-probe.ts)／[ND wrapper](../src/review/abort-scope-evidence-native-diagnostic.ts)がmodule評価時に対応する取得口を各1回呼び、bounded-readの別々の保存slotを空にする。2つの取得口はその後もmodule exportとして存在する。元試験が確認するのはclassコンストラクタの指定own property不在と、先行消費後の再取得拒否だけで、prototype・継承・別名・export・配布閉包全体の不在や、import順の全対照ではない。errorを`toThrow(string)`で検査しており、errorの`code`同値を直接検査する形ではない。
+
+**別artifactの検査と将来条件。** [SA compiled fixture](../tests/review/fixtures/compiled-source-status-binding.mjs)はSA-26相当の2点（再取得は`{code:'internal_review_error'}`で検査）、[ND compiled fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)はND-30相当の2点（再取得は正規表現）を持つ。SA-25の4点は両fixtureにない。[現行梱包検査](../tests/review/package-http-classification.mjs)はwrapper等の指定ファイルをパッケージから除外しつつ、旧compiled fixtureを配布外のdistから実行する構成であり、現行bounded-readの2取得export／claimの不在証明ではない。
+
+[AP02／AP03設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)のT01／02へこの3件を引き渡す。SA-25はR02／03・C07で外部claim／callback閉包の不在、承認済みJS第3引数の扱いとcallback非実行、通常2引数と同ownerの初期source／Permit維持を対にする。引数個数・明示undefined／null／falseの仕様は未選択。SA-26／ND-30はR01／06・C06で、両取得関数だけでなくslot／static登録／runner／参照を候補artifactで確認する。名前付きimportのリンク時失敗やnamespace不在は、現行の取得後の同期拒否とは非同等。V01／02／04／06の通常経路正対照とalias／再露出等の負の対照を別承認後に確認し、単なる起動不能を不在成功にしない。3件とも旧試験は保持、処遇未選択、保証低下・撤去・互換変更・公開は未承認。
+
+### 別gate UN62
+
+| ID／対象 | 別管理の検査主題・責務先 | 扱い |
+|---|---|---|
 | A1-X04／[UN-01〜62](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-un-01) | 旧ND単体のissuer／consumer・同reader・cleanup・時計／再入・provenance／seal。RV12／[B-03](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md) | NSレビューの専用case行なしという意味で、既存B-03のmatrixや限定値kernel検証がないという意味ではない。62行をAP01の保証免除へ含めない |
 
 入口7行の残り[ACK-34〜36](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-ack-34)はNS02、[CR04](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#cr04)はNS05に専用行があるが、撤去済み／不在検査済み／承認済みではない。旧ND単体のLM03・専用artifact、通常経路のKEEP／US／EK／ET・FRは、それぞれの元台帳へ責務を残す。
@@ -425,7 +442,7 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 
 ## 6 明示対応済みcaseの残差・失われ得るassertionと責務先
 
-以下は専用case行への審査入口であり、6行を一括で受容する表ではない。6レビューの専用case行を本台帳の明細参照とし、原文を再copyして条件を二重管理しない。各旧case／assertionは当該行の元assertion列と将来条件を参照して個別票へ結合する。全行「旧試験維持／処遇未選択／保証低下未承認」。本書追加のSA-02〜04・06〜24／ND-03〜06・09〜15・17・20〜29はA1-S01〜44を参照する。入口未照合3行と別gate UN62は§3の別表に残す。
+以下は専用case行への審査入口であり、6行を一括で受容する表ではない。6レビューの専用case行を本台帳の明細参照とし、原文を再copyして条件を二重管理しない。各旧case／assertionは当該行の元assertion列と将来条件を参照して個別票へ結合する。全行「旧試験維持／処遇未選択／保証低下未承認」。本書追加のSA-02〜04・06〜24／ND-03〜06・09〜15・17・20〜29はA1-S01〜44を参照する。入口の追加照合3行はA1-X01〜03、別gate UN62はA1-X04を参照する。
 
 | ID／NS・case参照 | 旧直接assertと連続保証の残差（区別して審査） | 責務先・将来回復条件 | 通常維持との境界 |
 |---|---|---|---|
@@ -450,13 +467,13 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 
 ## 7 個別票の固定項目・現在値
 
-個別票は文書dataであり、runtime証拠・claim・発行口ではない。A1-R／Uの要約から自動で「受容」を選択しない。NS専用行119＋本書追加44の計163旧caseにも、まだ人の個別承認はない。
+個別票は文書dataであり、runtime証拠・claim・発行口ではない。A1-R／Uの要約から自動で「受容」を選択しない。NS専用行119＋本書追加47の計166旧caseにも、まだ人の個別承認はない。
 
 | ID／欄 | 必須内容 | 現在値・未記入時の扱い |
 |---|---|---|
 | A1-P01 識別 | 正規旧ID・元revision／宣言テンプレート／入力variant、対象lane・artifact、assertion列の参照 | IDは§2〜4／6へ結合。実行fullName・fault位置を推測生成しない |
 | A1-P02 維持境界 | 該当K01〜05と共通source／owner・影響しない根拠 | 維持必須。影響不明はUnknownで審査保留 |
-| A1-P03 保証／喪失 | 旧testが直接assertするcode／count／shape／診断・故障位置、何を失い何は残るか | 明示対応caseは元レビュー列／追加専用行を参照。閉鎖laneの元本文照合は揃い、入口3行は別票で個別照合待ち。喪失は将来変更時の可能性で現在の退行判定ではない |
+| A1-P03 保証／喪失 | 旧testが直接assertするcode／count／shape／診断・故障位置、何を失い何は残るか | 明示対応caseは元レビュー列／追加専用行を参照。入口の追加照合3行も旧assertionと将来の不在検査の差を記録済みで、処遇・承認は別。喪失は将来変更時の可能性で現在の退行判定ではない |
 | A1-P04 代替と残差 | 新case・共有部分・異なる入力／時点／owner・未代替assertion | 旧分類を維持。Dの成功数・似たcodeで同等としない |
 | A1-P05 所有／失敗 | 実装上owner、停止・未公開値・未確認cleanup／custody・診断の保持先 | §3／5／6の役割へ引継ぎ。人の担当者は未割当。全解放・実容量は未確認ならUnknown |
 | A1-P06 回復 | 同入力・同元位置・正負対照・元期限・source／compiled artifact・終了確認と再レビュー条件 | 将来条件だけ記載。未実施を成功へ変えない。新friend・台帳共有を回復口にしない |
@@ -470,7 +487,7 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 ## 8 優先順と停止条件
 
 1. §2の排他的区分と§5のK条件を先に確認し、非提供と通常維持を混ぜない。旧case・variant・artifactを固定して重複4行の両参照を保つ。
-2. §3の初稿44行は全行を文書照合した。旧分類・元assertionと独立対照の区別を引き継ぎ、入口3行（SA-25／26・ND-30）をAP02／03／05の別票で個別に照合する。UN62はB-03の別gateに残す。未レビュー・未確認・保証差を群全体の受容で覆わない。
+2. §3の初稿44行と入口追加3行は元本文を照合済み。入口7行の記録をAP02／03／05の判断票へ渡し、元assertionと撤去・互換変更後の受入条件を分ける。UN62はB-03の別gateに残す。未確認・保証差を群全体の受容で覆わない。
 3. 明示対応済みの各旧caseもA1-P01〜10へ結合し、通常維持への影響・失われ得る直接assert・残差所有と回復条件を確定する。追加条件F01〜05と別gateを、失う旧保証へ混入しない。
 4. 個別受容の可否はユーザーの別承認へ渡す。受容できなければ回復先行または候補リリース停止。旧試験削除・friend撤去・設定変更・実装・公開はここから開始しない。
 
@@ -478,7 +495,7 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 
 ## 9 今回の静的確認
 
-以下は初稿draft-0.1時の記録。追加個別照合の現在値・確認範囲は§2の追加表・§3のA1-S01〜44と末尾のdraft-0.12記録を参照する。draft-0.1〜0.11の件数は各時点の履歴として保持する。
+以下は初稿draft-0.1時の記録。追加個別照合の現在値・確認範囲は§2の追加表・§3のA1-S01〜44・A1-X01〜03と末尾のdraft-0.14記録を参照する。draft-0.1〜0.13の件数は各時点の履歴として保持する。
 
 正規228行のanchorと、6レビューの専用case行の最初の正規旧caseリンクを照合した。本文参照・D候補リンク・同名だが別入力の行を重複として数えず、旧case IDをanchorから確定した。未レビュー表は旧台帳の主題と残差の索引で、44行の直接assertionレビュー完了ではない。実装・製品module import／実行・試験再実行・build／pack・発行・保証回復判定は行っていない。
 
@@ -549,3 +566,9 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 基準`47e5f3b`で元3caseの直接assertion、返却／停止位置、DR-21／DN-10／22・DB-13／DN-14と旧compiled fixtureの差を静的に照合した。対象はAP01の2MD、正規228行・重複除外119＋追加44＝163、閉鎖lane残0／入口3／別gate62。旧試験・閉鎖条件・処遇未選択・承認状態は維持。製品module import・試験再実行・build／pack・発行・コミット・Pushは行っていない。
 
 静的確認では、2MDの表28・ローカル参照247・明示anchor151、差分空白とstage0を確認した。製品・試験・設定の差分はない。
+
+### draft-0.14：SA-25／26・ND-30の入口境界照合（2026-11-19）
+
+基準`c1f562b`で元3caseの直接assertion、sourceのclaim拒否位置、別slotのmodule評価時取得、DR-20とcompiled／梱包の検査範囲を静的に照合した。対象はAP01のMD 2件だけ。旧試験・処遇未選択・未承認・各閉鎖条件を保持し、製品module import・friend取得・試験再実行・build／pack・発行・コミット・Pushは行っていない。
+
+静的確認では、正規228行・重複除外119＋閉鎖lane追加44＋入口追加3＝166、閉鎖lane残0／入口残0／別gate62を再計算した。2MDの表29・ローカル参照258・明示anchor152、差分空白とstage0を確認した。初回の補助照合は2試験のimport表記の空白差で停止し、空白を許容して再確認した。製品・試験・設定の差分はない。
