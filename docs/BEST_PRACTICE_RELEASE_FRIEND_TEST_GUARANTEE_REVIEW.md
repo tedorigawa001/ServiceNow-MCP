@@ -56,7 +56,7 @@ Status: **限定リリースの公開方針だけ採用し、AP01の個別保証
 
 [AP05 PK02／FX03・04の試験分離設計 draft-0.3](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)に、旧SA／NDの直接assertion、候補Pの通常経路・各friend不在と混入対照、Dの補完／未代替を分離した。現行のwrapper除外と配布物内部のfriend不在を同一視しない。旧試験・設定・PK03／FX06は変更せず、切替・実行は別承認。
 
-[AP05 PK03／FX06の試験分離設計 draft-0.1](BEST_PRACTICE_RELEASE_AP05_PK03_FX06_VERIFICATION_SPLIT_DESIGN.md)に、旧compiledの値kernelと実class syntheticを区別し、両方を旧Hとして維持する条件を記載した。候補Pでは保持する6値module・通常経路を別の正対照とし、旧sessionの時刻接続の不在／混入を確認する。Dの事前O・holdbackは旧空200の採取やpost-Oの実class取消・discardを代替しない。旧試験変更・梱包・切替は未実施。
+[AP05 PK03／FX06の試験分離設計 draft-0.2](BEST_PRACTICE_RELEASE_AP05_PK03_FX06_VERIFICATION_SPLIT_DESIGN.md)に、旧compiledの値kernelと実class syntheticを区別し、両方を旧Hとして維持する条件を記載した。候補Pでは保持する6値module・通常経路を別の正対照とし、旧sessionの時刻接続の不在／混入を確認する。Dの事前O・holdbackは旧空200の採取やpost-Oの実class取消・discardを代替しない。旧試験変更・梱包・切替は未実施。
 
 ## 5 対応順と承認gate
 

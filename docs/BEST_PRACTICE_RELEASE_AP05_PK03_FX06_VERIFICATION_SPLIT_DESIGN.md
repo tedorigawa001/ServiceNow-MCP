@@ -1,7 +1,9 @@
 # AP05：PK03／FX06の値kernel・旧実session経路・配布物検査の分離
 
-Version: release-ap05-pk03-fx06-verification-split-draft-0.1 / Date: 2026-11-19。
-Status: **試験分離の設計案。旧試験の変更・撤去・移行は未承認。** 静的基準HEADは `8b6e464`。[AP02撤去範囲のS04／K04〜06](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)、[B-03のFX06](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)、[AP01のNS06](BEST_PRACTICE_RELEASE_AP01_NS06_TIME_HANDOFF_GUARANTEE_REVIEW.md)を接続する。[PK01／FX05](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)、[PK02／FX03・04](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)、旧UN62／新LM03は変更しない。
+Version: release-ap05-pk03-fx06-verification-split-draft-0.2 / Date: 2026-11-19。
+Status: **試験分離の設計案。旧試験の変更・撤去・移行は未承認。** 静的基準HEADは `8b6e464`。[AP02撤去範囲のAP02-S04、AP02-K03／04（旧K04〜06）](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)、[B-03のFX06](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)、[AP01のNS06](BEST_PRACTICE_RELEASE_AP01_NS06_TIME_HANDOFF_GUARANTEE_REVIEW.md)を接続する。[PK01／FX05](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)、[PK02／FX03・04](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)、旧UN62／新LM03は変更しない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`e4da77f`（修正時のHEADは`3806686`）。AP02基準への参照が新ID「S04」と旧ID「K04〜06」を混在させていたため、「AP02-S04、AP02-K03／04（旧K04〜06）」とした。§5に静的確認を追加した。H／P／N／Dの各行・判定は変更していない。
 
 先行AP03差分、正式発行口・C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown・調査保留、現行期限と既定並列度を維持する。今回は静的照合とMDのみ。旧試験変更・skip、実装、撤去、build・梱包・展開、試験実行、混入操作、実接続・実通信、設定変更、公開、コミット、Pushは行わない。
 
@@ -49,3 +51,7 @@ FX06はSA／NDのような `take*Probe` を使わず、通常classの静的入�
 | PKF3-D02／上位時刻への移譲と取消 | Dで同receiptの一度限り受理、混入拒否と対照側ownerの非干渉を検査候補にする。cleanup後のcancel／deadline／時計throw・逆行は `release_comparison_withheld` にのみ反映し、完了したrunの `ok`／`code`／`run_primary` を書き換えない | Dのwithheldは旧実classの同accepted→heldへの移譲、`sourceClosed` 前後のguard切替、固定finallyのdiscard、TH04／05の同期／予約後取消とTH06のpost-O sweepを代替しない。回復時は停止位置・前後のO・保持slot・一次診断を照合し、一次cleanupの未実行が後続rollbackで隠れる場合も区別する。worker jobへの `T_i`／`E` の正式結合は依然未接続 |
 
 Dは旧friendを取得せず、Pのsession／Permit／私有受領物を流用しない。H／P／Dは対象revision・成果物・旧assertionとの差・失敗理由・子process終了を別記録にする。AP01／AP04で未代替保証の処遇、AP05で展開・混入対照と切替、B-03で隔離・終了確認をそれぞれ判定するまでは、旧試験と現行梱包条件を維持し、配布物の不在を根拠に旧試験を削除しない。
+
+## 5 静的確認
+
+基準`e4da77f`で、PK03（package-http-classification）のpack dry-run一覧とリポジトリ`dist`の検査、release系6moduleのJS・宣言・両map同梱と依存許可・時計／I/O／timer禁止、session宣言の私有名9件の非公開と`stop`から`#clearReleaseComparison`への直接呼出し、release比較契約・上位owner・FX06の別child起動と明示timeoutの不在（H01）、FX06 fixtureの先頭import・前半の移譲／discard／再handoff拒否と後半の`prepareNewReviewComposition`の各assertion（H02／03）、H04の参照3ファイルとNS06のTH01〜06、N01の旧接続名と`synthetic_io`分岐、AP02-K04の通常準備経路（P02）を静的に照合した。本書のID13行（H4／P4／N3／D2）、表4・ローカル参照12・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、製品module import・試験再実行・build／pack・実展開は行っていない。
