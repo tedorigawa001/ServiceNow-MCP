@@ -1,9 +1,11 @@
 # AP05：EV01〜10の静的不足表と限定対照の承認票案
 
-Version: release-ap05-static-gap-limited-control-approval-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-static-gap-limited-control-approval-draft-0.2 / Date: 2026-11-19。
 Status: **審査資料の案。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `a29fab5`。下表の「確認済み」は文書・ソースの静的事実に限り、候補artifact、実測、適合・実行承認を意味しない。限定対照はすべて申請前・未実施。
 
-[証拠受入設計 draft-0.2](BEST_PRACTICE_RELEASE_AP05_UNRESOLVED_EVIDENCE_ACCEPTANCE_DESIGN.md)のAP5-EV01〜10を正とし、[固定slot／変異manifest](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)、[操作site／失敗prefix](BEST_PRACTICE_RELEASE_AP05_OPERATION_SITE_FAILURE_PREFIX_DESIGN.md)、[費目・上界](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_COST_UPPER_BOUND_DESIGN.md)へ戻せるようにする。候補Pの[共通受入条件](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)と[外側時間枠](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)は変更しない。H／D・UN62／LM03・AP06は別審査。
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`d1497f7`（修正時のHEADは`d1497f7`）。§5に静的確認を追加し、証拠受入設計から本書への参照段落の追加に合わせて同設計の参照表記をdraft-0.3にした。各EV／QA行・判定は変更していない。
+
+[証拠受入設計 draft-0.3](BEST_PRACTICE_RELEASE_AP05_UNRESOLVED_EVIDENCE_ACCEPTANCE_DESIGN.md)のAP5-EV01〜10を正とし、[固定slot／変異manifest](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)、[操作site／失敗prefix](BEST_PRACTICE_RELEASE_AP05_OPERATION_SITE_FAILURE_PREFIX_DESIGN.md)、[費目・上界](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_COST_UPPER_BOUND_DESIGN.md)へ戻せるようにする。候補Pの[共通受入条件](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)と[外側時間枠](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)は変更しない。H／D・UN62／LM03・AP06は別審査。
 
 先行AP03の未コミット差分、通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回はMDのみ。旧試験変更・実装・実測・試験実行・build／梱包／展開・変異／process／保全操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
@@ -56,3 +58,7 @@ Status: **審査資料の案。候補revision・digestは未確定。数値・�
 先に本表の静的不足（対象・site・規則・費目）を審査し、読み取りで閉じない問いだけを個別票案へ渡す。専用対照の上限と終了・保全責務を事前に固定できない票は申請・実施へ進めない。限定対照の結果は、対象と許可範囲内の事実にだけ紐づけ、方式採用・数値承認・候補P合格へ転用しない。
 
 候補入場は別審査。AP5-G01〜04、段階ごとのpin、前slotの完全終端、`W_i` と系列で一度だけの `R_cleanup` が必要。後段でしか得られないdigestを先に要求せず、後段の結果で先行条件の不足も埋めない。根拠・承認・残存責務先が未確定なら起動0。旧試験切替・閉鎖条件の解除・公開はこの票の対象外。
+
+## 5 静的確認
+
+基準`d1497f7`で、§1のEV01〜10の行キーとL行の範囲が証拠受入設計の各EV行と一致し、CF01〜03・05／CF04の割当てを反映していること、PK01〜03のcompiled childが `inherit` で明示timeoutを持たず、PK04の個別timeoutが系列上限でないこと、worker supervisorの `resume()`／`destroy()`、EV07のSP12／FP07／SR02〜05、QA01〜08がEV01〜10を一度以上扱うこと、各QAの残存責務（SR01〜08）がmanifestのSR定義と合い、QA03の等号起動0が外側時間枠設計の厳密不等号と一致することを静的に照合した。本書の新規ID8行（QA01〜08）が他文書のIDと衝突しないこと（EV01〜10は証拠受入設計への参照キー）、表3・ローカル参照12・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・計測・process／保全操作は行っていない。

@@ -65,7 +65,7 @@ draft-0.3のレビュー修正：レビュー修正の基準HEADは`3df3cd5`（�
 
 [PK01〜04の固定slot・変異manifest案 draft-0.3](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)で、固定slot SL01〜22、一行一変異のPΔ MT01〜56、操作site SP01〜15と残存責務 SR01〜08をL01〜11へ渡す中継IDとして定義した。実site・入力variant・最大通過回数・数値は未確定のまま。
 
-[未導出項目の静的確認・実確認と証拠の受入条件 draft-0.2](BEST_PRACTICE_RELEASE_AP05_UNRESOLVED_EVIDENCE_ACCEPTANCE_DESIGN.md)で、本節の未導出項目をEV01〜10に分け、静的に確かめる範囲、別承認後の実確認と証拠、受入条件を定義した。実確認・数値・方式は未承認のまま。
+[未導出項目の静的確認・実確認と証拠の受入条件 draft-0.3](BEST_PRACTICE_RELEASE_AP05_UNRESOLVED_EVIDENCE_ACCEPTANCE_DESIGN.md)で、本節の未導出項目をEV01〜10に分け、静的に確かめる範囲、別承認後の実確認と証拠、受入条件を定義した。実確認・数値・方式は未承認のまま。
 
 ## 5 静的確認
 
