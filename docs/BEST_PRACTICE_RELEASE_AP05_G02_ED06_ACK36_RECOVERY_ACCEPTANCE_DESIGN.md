@@ -1,8 +1,10 @@
 # AP05 G02：ED06／ACK-36の回復先行案・受入条件
 
-Version: release-ap05-g02-ed06-ack36-recovery-acceptance-draft-0.1 / Date: 2026-11-20。
+Version: release-ap05-g02-ed06-ack36-recovery-acceptance-draft-0.2 / Date: 2026-11-20。
 
 Status: **設計のみ。ED06の処遇は未選択・未承認。回復は未確認、G02は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準 `99066f7` は文書・現行source／旧testの読取り用で、製品候補ではない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`41c897a`（修正時のHEADは`41c897a`）。本書の後に追加されたED06の後続検討12本（`42d803c`〜`781c9b6`）は前段の文書だけを参照しており、本書から後続への参照がなかったため、AP05候補入場設計からたどれなかった。§4の末尾に後続文書への参照を検討順に加えた。3対照・固定境界・受渡し欄・停止条件は変更していない。
 
 [ED01〜07個別処遇案・承認票](BEST_PRACTICE_RELEASE_AP05_G02_ED_INDIVIDUAL_DISPOSITION_APPROVAL_DESIGN.md)のED06／ACK-36だけを対象とする。[G02旧assertion・回復条件](BEST_PRACTICE_RELEASE_AP05_G02_OLD_ASSERTION_RECOVERY_DESIGN.md)と[NS02 N2-R11](BEST_PRACTICE_RELEASE_AP01_NS02_ACK_RELEASE_GUARANTEE_REVIEW.md)の元保証を保持し、[G01のED06](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)が残すAP02 S03／05／07と通常K02〜04を区別する。回復先行案を審査する条件で、処遇の選択、保証回復の認定、旧試験切替のいずれでもない。
 
@@ -39,3 +41,5 @@ Status: **設計のみ。ED06の処遇は未選択・未承認。回復は未確
 | 責務先と承認 | session／source／Permit／port・登録ready ownerは通常Kと欠失時停止、AP05旧fixture担当はHの故障条件・期待値、AP04側は結果差、AP01側は個別処遇の再審査。人の担当・期限は未割当。ED06個別処遇、AP02実装、候補検証、旧試験切替は別の承認記録 |
 
 3対照の必要証拠が揃って初めて回復先行案を再審査できる。Hの保持はPで旧synthetic返却を提供する意味ではなく、Pの両対照だけでもHの保証を代替しない。いずれかが欠ける、通常K・共有責務が不明、または候補での実施方法が未承認なら、旧試験と通常経路を保持し、**ED06は未選択・未承認、G02は未充足、SL01は起動0**のままとする。
+
+本書の後の検討は、[未変更候補の実bind・登録結合欠失の観測契約](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_UNCHANGED_CANDIDATE_BIND_OBSERVATION_DESIGN.md)→[登録結合欠失の既存境界・観測非介在の静的照合](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_BIND_BOUNDARY_STATIC_REVIEW_DESIGN.md)→[欠失対照が見つからない場合の処遇審査条件](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_NO_CONTROL_DISPOSITION_REVIEW_DESIGN.md)→[非提供審査前の経路分離・旧Promise影響の静的照合](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_NON_PROVISION_BOUNDARY_REVIEW_DESIGN.md)→[旧Promise利用影響の確認範囲・外部説明案](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_PROMISE_IMPACT_NOTICE_DESIGN.md)→[外部利用影響の限定確認・個別承認票案](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_LIMITED_REVIEW_APPROVAL_DESIGN.md)→[資料候補・閲覧前確認条件](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_MATERIAL_PRECHECK_DESIGN.md)→[閲覧承認前の不足証拠・確認順序](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_PREAPPROVAL_EVIDENCE_CHECKLIST.md)の順に続き、段階1〜4の様式は最後の手順案から参照する。いずれも設計・様式案で、ED06の処遇の選択、回復の認定、閲覧・外部利用の承認ではなく、本節の停止条件を変更しない。
