@@ -1,7 +1,9 @@
 # AP03 C07：source constructorの第3引数・互換差と拒否境界
 
-Version: release-ap03-c07-source-constructor-argument-draft-0.2 / Date: 2026-11-19。
+Version: release-ap03-c07-source-constructor-argument-draft-0.3 / Date: 2026-11-19。
 Status: **比較と採用の記録。C07-Bの第3引数の扱いを採用。撤去・実装は未承認。** 比較の基準HEADは`16271eb`。[AP02／03設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)のC07／D04と[入口7件の引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)のED01／04／05／07を具体化する。C05との組合せは[C05／C07の採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)を参照。C02〜04／06・旧試験処遇とAP03全体の承認は別。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`a191bfd`（修正時のHEADは`a191bfd`）。静的確認の記録がなかったため、§5に追加した。比較表・C07-V1〜4・採用の記述は変更していない。
 
 通常経路未切替・正式発行口／C実行入口／body起動閉鎖・全体受付無効・Unknown・調査保留と、既存期限・既定並列度を維持する。今回の変更はMDのみ。実装・発行／claim消費・旧試験変更／再実行・build／pack・実接続・実通信・実機操作・設定変更・公開・コミット・Pushは行わない。
 
@@ -42,3 +44,7 @@ Status: **比較と採用の記録。C07-Bの第3引数の扱いを採用。撤�
 | C07-V4 | 候補の同revisionでJS／宣言／mapと隔離配布物を検査し、外部claim・callbackの不在と通常import成功を対にする。旧SA-25／ACK-34・35／CR04は元実classの対照として保持 | 入口不在は旧guardの実行同等性ではない。単なる依存欠落は不在成功にしない。切替・旧試験処遇・配布物検証はAP02／05の別承認 |
 
 ユーザー指示によりC07-Bを採用した（[C05／C07の採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)）。次にAP02で共有呼出しの2引数化と結合維持、AP05で元assertionと候補artifactの試験境界を対にする。C07の採用だけで実装・撤去・公開へ進まない。
+
+## 5 静的確認
+
+基準`53eff59`で、§1の現行の扱い（[bounded-source](../src/review/bounded-source.ts)の58行のconstructorが第3引数 `creation` を持ち、60行で truthy の場合だけ分岐すること、[adapter](../src/review/update-set-adapter.ts)の90行と同ファイルの `withBoundedUpdateSetSource` が2引数で生成すること、[session](../src/servicenow/bounded-read.ts)の366行の共有 `#openComposition` が省略時も `creation` を第3引数に渡すこと）、§4のC07-V3が参照する[省略時テスト](../tests/review/private-composition.test.ts)の所在、§4末尾と Status 行のC05／C07採用記録draft-0.4への参照を静的に照合した。以下の数はdraft-0.3時点で、本書のID4行（C07-V1〜4）、表2・ローカル参照13（重複を除き8）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。

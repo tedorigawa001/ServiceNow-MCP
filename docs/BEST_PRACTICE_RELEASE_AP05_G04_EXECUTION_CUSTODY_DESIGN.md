@@ -1,12 +1,13 @@
 # AP05 G04：候補検証の隔離・起動条件・終了と保全
 
-Version: release-ap05-g04-execution-custody-draft-0.1 / Date: 2026-11-20。
-
+Version: release-ap05-g04-execution-custody-draft-0.2 / Date: 2026-11-20。
 Status: **設計のみ。G04は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準 `17c0521` は文書の読取りに限り、製品候補ではない。候補検証・停止／保全操作の実行は未承認。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`a191bfd`（修正時のHEADは`a191bfd`）。冒頭の「先行AP03の未コミット差分5ファイル」は `53eff59` でコミットされたため、その5文書に手を加えない旨に改めた。Version行とStatus行の間の空行を除き、§5に静的確認を追加した。候補入場設計draft-0.4から本書への参照を加えた。各順序・終了軸・配賦・保全の判定は変更していない。
 
 [候補入場条件](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)のAP5-G04「実行と保存」を、[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)、[固定slot／変異manifest](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)、[外側時間枠・cleanup予約](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)に結ぶ。[G01の仕様根拠](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)、[G02の処遇と許可](BEST_PRACTICE_RELEASE_AP05_G02_OLD_ASSERTION_RECOVERY_DESIGN.md)、[G03の同一候補pin](BEST_PRACTICE_RELEASE_AP05_G03_CANDIDATE_PIN_DESIGN.md)は別の入場条件。本書でG01〜03を代替しない。
 
-先行AP03の未コミット差分5ファイルと旧試験・期待値、通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回は本MDのみ。実装・実測・試験実行・build／梱包／展開・process／保全操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
+`53eff59` でコミットされた先行AP03の5文書には手を加えない。旧試験・期待値、通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回は本MDのみ。実装・実測・試験実行・build／梱包／展開・process／保全操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
 ## 1 隔離と固定slot順
 
@@ -61,3 +62,7 @@ Status: **設計のみ。G04は未充足、SL01は起動0。候補revision・dig
 保全は参照ID・到達位置・固定理由・四軸状態・未解決責務・未採取／切詰め等の有限記録に限る。token・URL・payload・例外本文・環境の生値は保持しない。[操作site・失敗prefix](BEST_PRACTICE_RELEASE_AP05_OPERATION_SITE_FAILURE_PREFIX_DESIGN.md)と[証拠受入設計](BEST_PRACTICE_RELEASE_AP05_UNRESOLVED_EVIDENCE_ACCEPTANCE_DESIGN.md)に沿い、未確認を消して空欄にしない。有限保持・照会・終了の方法は未承認。
 
 **現在はG04未充足・SL01起動0。** 隔離・順序の記述は実行許可ではなく、前slotの必要証拠・有限費目・上位保持と権限のいずれも設計記述だけでは充足しない。[限定対照の承認票案](BEST_PRACTICE_RELEASE_AP05_STATIC_GAP_LIMITED_CONTROL_APPROVAL_DESIGN.md)のQA03〜08は個別承認・取得証拠の範囲に限り、候補検証の許可や方式採用にしない。候補の入場・受入・旧試験切替・公開は別判断とし、各閉鎖条件を解除しない。
+
+## 5 静的確認
+
+基準`17c0521`で、§1のSL01〜04・SL05〜15（P+）・SL16〜21（P0）・SL22の範囲がmanifestのSL行と、§2のT01〜04の名前が共通受入設計と、V01〜04が費目台帳のT01〜04対応行と一致すること、§3の `t_i < D_obs` と `t_i + W_i < D_obs` の両方を要求する入場条件・`L_k = D_obs + sum(R1…Rk)`・R1〜R7とAP5-C01〜07の割当てが外側時間枠設計と一致すること、§4のU01〜04・KS04〜09・FP02／04／05／07〜10／12と、限定対照承認票案のQA03〜08の参照先を静的に照合した。以下の数はdraft-0.2時点で、本書に新規IDはなく（SL／T／V／C／R／U／KS／FP／QAは他文書への参照キー）、表4・ローカル参照13（重複なし）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process／保全操作は行っていない。

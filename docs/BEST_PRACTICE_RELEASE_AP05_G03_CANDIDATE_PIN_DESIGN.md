@@ -1,12 +1,13 @@
 # AP05 G03：同一候補の固定項目と段階別pin
 
-Version: release-ap05-g03-candidate-pin-draft-0.1 / Date: 2026-11-20。
-
+Version: release-ap05-g03-candidate-pin-draft-0.2 / Date: 2026-11-20。
 Status: **設計のみ。G03は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準 `3aaaf52` は本文の参照元で、候補revisionではない。実体のpin・候補の生成・採取は未実施。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`a191bfd`（修正時のHEADは`a191bfd`）。冒頭の「先行AP03の未コミット差分5ファイル」は `53eff59` でコミットされたため、その5文書に手を加えない旨に改めた。Version行とStatus行の間の空行を除き、§4に静的確認を追加した。候補入場設計draft-0.4から本書への参照を加えた。各対象・段階・起動0の判定は変更していない。
 
 [AP05候補入場条件](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)のAP5-G03「同一候補」を、[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)、[固定slot／変異manifest](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)のSL01〜04、[証拠受入設計](BEST_PRACTICE_RELEASE_AP05_UNRESOLVED_EVIDENCE_ACCEPTANCE_DESIGN.md)のEV01／02／03／07に結ぶ。[通常並列対照の依存pin設計](BEST_PRACTICE_WFB_SGA_DEPENDENCY_PIN_CONFIG_DESIGN.md)からは宣言・実体・実解決の分離だけを参照し、対照の時間値・環境・取得手段は移さない。旧試験H、候補配布物P、開発側Dの成果物・依存・実行結果は別にする。
 
-先行AP03の未コミット差分5ファイルと旧試験を保持する。通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回は本MDのみ。実装・実測・試験実行・build／梱包／展開・依存解決や起動を伴う実確認・設定変更・実接続・実通信・公開・コミット・Pushは行わない。
+`53eff59` でコミットされた先行AP03の5文書には手を加えず、旧試験を保持する。通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回は本MDのみ。実装・実測・試験実行・build／梱包／展開・依存解決や起動を伴う実確認・設定変更・実接続・実通信・公開・コミット・Pushは行わない。
 
 ## 1 何を固定するか
 
@@ -46,3 +47,7 @@ pack側の一覧と展開側のmanifestを照合するとき、archive内の位�
 - **起動前の不足は次段起動0。** すでに必要なpinの欠落・不一致、承認範囲外の参照、前slotの終了未確認は後段で補完しない。将来の候補変更・検査器の変更・作り直しは別系列として再審査し、旧結果を持ち越さない。未生成の後段pinだけを理由に先行段を拒否することもしない。
 - **起動後に判明した差は、新規起動を閉じる。** 実解決／loadや出力のdrift、部分生成、照合不能時は最初の理由・最後に照合できたpin・消費済み／未到達／未確認と残存責務を分けて保持する。[操作site・失敗prefix](BEST_PRACTICE_RELEASE_AP05_OPERATION_SITE_FAILURE_PREFIX_DESIGN.md)のFP01／02／07／11／12と[外側時間枠・cleanup予約](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)に従う。[費目・上界](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_COST_UPPER_BOUND_DESIGN.md)の通常pin・引継ぎ費で消費済みの操作をRで再計上せず、停止後に別途必要なR4棚卸し等は事前予約に計上する。後始末は同系列に事前承認された予約・権限の範囲のみ。安全に照合できないものを不在や空とみなさず、未終端・借用未退役・保全未受理の対象を削除しない。
 - **候補・数値・方法を埋めない。** 独立検査器の版・固定entry・依存の実供給・実解決／loadの観測手段・読み取り上界・保全方式／保全先は確定していない。[限定対照の承認票案](BEST_PRACTICE_RELEASE_AP05_STATIC_GAP_LIMITED_CONTROL_APPROVAL_DESIGN.md)のQA01／02が後日承認されても、実候補のpinや候補検証の承認とは別。G01／G02／G04を代替せず、現時点はSL01から起動0とする。
+
+## 4 静的確認
+
+基準`3aaaf52`で、§1の現行PK04の記述（[package-worker](../tests/review/package-worker.mjs)の42〜47行で、コミット済みlockを添付して `npm ci --omit=dev --prefer-offline` を実行し、検査fixtureを別にcopyすること）、§2のSL01〜04とSP01〜04・FP01／02の対応がmanifestと操作site設計の各行と一致すること、EV01／02／03／07と限定対照承認票案のQA01（EV01・02）・QA02（EV03・07）の対応、§3のFP01／02／07／11／12の参照先、[依存pin設計](BEST_PRACTICE_WFB_SGA_DEPENDENCY_PIN_CONFIG_DESIGN.md)の所在を静的に照合した。以下の数はdraft-0.2時点で、本書に新規IDはなく（SL／SP／EV／FP／QAは他文書への参照キー）、表2・ローカル参照17（重複を除き15）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・依存解決・process操作は行っていない。

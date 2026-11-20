@@ -1,8 +1,9 @@
 # AP05 G01：先行AP03採用記録の確定前レビュー
 
-Version: release-ap05-g01-ap03-adoption-preconfirmation-review-draft-0.1 / Date: 2026-11-20。
-
+Version: release-ap05-g01-ap03-adoption-preconfirmation-review-draft-0.2 / Date: 2026-11-20。
 Status: **静的レビューのみ。互換方針の採用記録を照合したが、候補仕様の根拠としての確定は未了。G01は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** `aec9e1d` は読み取り時のHEADであり、先行AP03の作業中差分や製品候補を含めた識別子ではない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`a191bfd`（修正時のHEADは`a191bfd`）。§1の「HEADに含まれない」「未追跡」と参照差の段落は `aec9e1d` 時点の記録として残し、`53eff59` で採用記録2文書がコミットされ参照ラベルがdraft-0.4に揃ったことを追記した。Version行とStatus行の間の空行を除き、§5に静的確認を追加した。各方針・ED行・停止条件は変更していない。
 
 [G01のED照合表](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)は旧caseと切る／残す辺の台帳。本書は、その台帳に渡す**採用判断の出所・適用範囲・確定前の停止条件**を審査する。[候補入場条件](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)のG01のみを対象とし、[G02の旧保証・許可](BEST_PRACTICE_RELEASE_AP05_G02_OLD_ASSERTION_RECOVERY_DESIGN.md)は別。先行AP03の5ファイルは変更しない。通常経路未切替、旧試験・期待値、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回は本MDのみ。実装・実測・試験実行・build／梱包／展開・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
@@ -17,6 +18,8 @@ Status: **静的レビューのみ。互換方針の採用記録を照合した�
 | [ED01〜07の引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md) | HEAD draft-0.2＝旧assertionと判断案。作業中draft-0.6＝採用方針を反映 | 影響行の索引。元7件の正規分類は未対応、個別処遇の承認は追加なし。採用方針を旧保証の代替にしない |
 
 **確定前の参照差。** C05／C07主記録の実版はdraft-0.4だが、C07比較設計の2箇所、親設計と入口引渡しの各1箇所にdraft-0.2の参照ラベルが残る。同じパスを指していても、参照ラベルだけで同じ採用記録を固定したことにはしない。後日の確定レビューで、意図する参照版を明示し、過去版を指すならその時点と根拠を区別する。C02〜04／06の参照先と、旧版での「未選択」が判断当時の記録か現行の判定欄かも併せて照合する。今回は先行差分を修正・stageしない。
+
+**追記（draft-0.2）：** `53eff59` で2つの主記録がコミットされ、C07比較設計・親設計・入口引渡しのC05／C07採用記録への参照ラベル計4箇所はdraft-0.4に揃った。再照合の結果は[G01照合設計 draft-0.3](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)の§1・§4。上表と上段落は `aec9e1d` 時点の記録として残す。
 
 ## 2 採用理由・範囲・越えてはいけない境界
 
@@ -48,3 +51,7 @@ S／Kは[AP02撤去範囲基準](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELI
 1. **採用記録を確定する別判断。** 2つの主記録と3つの参照文書について、版・当該節・採用指示の範囲・除外事項、EDごとの維持owner／未確認の到達辺を明示する。参照ラベル、旧版の記述、実ファイルの差を解消する時点は別に決める。先行差分とHEADは合成せず、本書による確定・編集・コミットの許可はない。
 2. **仕様採用に含めないもの。** AP02の全候補patch／共有辺・外部利用の確認、旧保証の個別処遇、AP02実装、AP05候補検証と旧試験切替、AP06公開はそれぞれ別判断。通常経路・共有責務に影響不明が残ればUnknown／調査保留のまま。静的検索、既存テスト本文、同名や同codeだけで候補の到達／不在・実行同等性を認めない。
 3. **G01停止条件。** 採用根拠の版と範囲、EDへの適用、切る／残す辺・共有ownerが必要な粒度で揃うまでG01は未充足。候補仕様の根拠として確定した場合も、候補revision・digestとG02〜04の承認を先取りしない。現時点はSL01から起動0。
+
+## 5 静的確認
+
+基準`aec9e1d`で、§2のC05-B／D04の前提（[現行prepare](../src/servicenow/bounded-read.ts)の310行がoptionsのown descriptorを `Object.getOwnPropertyDescriptors` で取り、外側Proxyの事前拒否がないこと）、C07-Bの前提（同366行の共有 `#openComposition` が省略経路でも `creation`（undefined）を第3引数として `BoundedUpdateSetSource` に渡すこと、[現行source](../src/review/bounded-source.ts)のconstructorが第3引数 `creation` を持つこと）、§3のS／K番号がAP02撤去範囲基準と一致することを静的に照合した。`53eff59` では採用記録2文書の版（draft-0.4／draft-0.2）と参照ラベル4箇所を照合した。以下の数はdraft-0.2時点で、本書に新規IDはなく（C方針・D・ED・S・Kは他文書への参照キー）、表3・ローカル参照17（重複を除き14）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。

@@ -37,7 +37,7 @@ Status: **個別承認用の設計。AP03のC05-B＋C07-B、C02〜04の案P、C0
 
 初期sourceのkey照合と通常Permit照合は同じ権限ではない。外部claim helperを消す際も、元rootによる初期sourceの一度結合・失敗時の失効と返却を保持する。開発rootの台帳を本番へ共有する、diagnostic／summary／同値copyからbindingを再建する、既存runを外部から採用する口で補わない。
 
-[AP02の撤去範囲基準 draft-0.1](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)で、R01〜08を実名の専用入口／field／実行辺、通常K01〜06、配布／旧試験の責務へ対応付けた。省略時にも使うstatus binding／会計接続を維持し、fake専用の時刻引渡しをsessionから分離しても既存packが期待する値moduleは初回撤去対象外とする。設計範囲の確定のみで、対象patch・全到達辺・実tarball・旧試験処遇は未承認／未確認。
+[AP02の撤去範囲基準 draft-0.3](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)で、R01〜08を実名の専用入口／field／実行辺、通常K01〜06、配布／旧試験の責務へ対応付けた。省略時にも使うstatus binding／会計接続を維持し、fake専用の時刻引渡しをsessionから分離しても既存packが期待する値moduleは初回撤去対象外とする。設計範囲の確定のみで、対象patch・全到達辺・実tarball・旧試験処遇は未承認／未確認。
 
 ## 3 通常経路で維持するもの
 
@@ -67,7 +67,7 @@ K06は「何も生成しない入口」ではない。新規session・同owner�
 | A23-C07 | JSからsource constructorへ第3引数creationを渡す | truthy creationはclaim／callback branch、falsy creationはそのbranchを通らない。現行のguess key拒否は旧私有結合に依存 | **B採用**。通常2引数と、JSで明示undefinedの第3引数1個だけを許容。その他の第3値・4個以上は同期invalid_input。内部通常呼出しを2引数化し、callbackを読まない。撤去・実装は別審査 |
 | A23-C08 | fake lane内のthrow／取消／期限／HTTP失敗とreject／unknown／withheld | fake pin後のPromise側故障と、入口の同期throwは別。Dの非実行draft summaryは別owner／別返値 | 撤去で元laneのfailureを一律unknown成功へ変換しない。AP04の非同等性・AP01の未代替保証を別審査。通常sourceのunknown／mismatchedはK03／04で維持 |
 
-[C07の第3引数・互換差と拒否境界 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)に、3個以上拒否と明示undefinedの3個だけ許容の比較、共有の省略時呼出しが現状3引数になる点、型とJS受付・emit順・通常正対照を分けて記録した。比較時点では未選択だった。採用仕様は次段を参照し、撤去・旧試験処遇とは分ける。
+[C07の第3引数・互換差と拒否境界 draft-0.1（比較時点）](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)に、3個以上拒否と明示undefinedの3個だけ許容の比較、共有の省略時呼出しが現状3引数になる点、型とJS受付・emit順・通常正対照を分けて記録した。比較時点では未選択だった。採用仕様は次段を参照し、撤去・旧試験処遇とは分ける。
 
 [C05／C07の採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)に、ユーザー指示によるC05-B＋C07-Bの採用範囲を記録した。own synthetic_ioは受け付けず、通常の同期summaryを維持する。後続のC02〜04／06の採用範囲は下記を参照。撤去と実装は未承認。
 

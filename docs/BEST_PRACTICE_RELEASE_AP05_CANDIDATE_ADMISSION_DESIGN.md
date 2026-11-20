@@ -1,7 +1,9 @@
 # AP05：候補入場条件・必要証拠・起動0の停止条件
 
-Version: release-ap05-candidate-admission-draft-0.3 / Date: 2026-11-19。
+Version: release-ap05-candidate-admission-draft-0.4 / Date: 2026-11-19。
 Status: **設計のみ。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。候補検証の実行は未承認。** 静的照合基準は `aac5c47`。これは文書の基準であり、製品候補ではない。
+
+draft-0.4のレビュー修正：レビュー修正の基準HEADは`a191bfd`（修正時のHEADは`a191bfd`）。`17c0521`／`aec9e1d`で追加されたG03・G04の設計への参照が不足していたため、§1末尾の段落に加えた。冒頭の「先行AP03の未コミット差分」は `53eff59` でコミットされたため、その旨に改めた。これに伴い§6のローカル参照数を10とし、数の時点と内訳を更新した。各ゲート・slot・配賦の判定は変更していない。
 
 draft-0.3のレビュー修正：レビュー修正の基準HEADは`7162f0c`（修正時のHEADは`7162f0c`）。`ef6be90`／`7162f0c`で追加されたG01・G02の照合文書への参照がどの文書にもなかったため、§1末尾に参照段落を加えた。これに伴い§6のローカル参照数を8とし、数の時点と内訳を更新した。各ゲート・slot・配賦の判定は変更していない。
 
@@ -9,7 +11,7 @@ draft-0.2のレビュー修正：レビュー修正の基準HEADは`7ad19c9`（�
 
 [共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)のAP5-G01〜04・T01〜04を、[固定slot／変異manifest](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)、[外側時間枠・cleanup予約](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)、[操作site・失敗prefix](BEST_PRACTICE_RELEASE_AP05_OPERATION_SITE_FAILURE_PREFIX_DESIGN.md)に結ぶ。[証拠受入設計](BEST_PRACTICE_RELEASE_AP05_UNRESOLVED_EVIDENCE_ACCEPTANCE_DESIGN.md)と[静的不足表・限定対照承認票案](BEST_PRACTICE_RELEASE_AP05_STATIC_GAP_LIMITED_CONTROL_APPROVAL_DESIGN.md)のEV／QAは、この入場判定の不足を遡る参照であり、候補固有の証拠や実行承認ではない。
 
-対象はPK01〜04の候補配布物（P）の系列に限る。旧試験（H）と開発別build（D）は別実行元・別owner・別予算・別結果とし、Pを代替しない。先行AP03の未コミット差分、旧試験・通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回はMDのみ。実装・実測・試験実行・build／梱包／展開・変異・process／保全操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
+対象はPK01〜04の候補配布物（P）の系列に限る。旧試験（H）と開発別build（D）は別実行元・別owner・別予算・別結果とし、Pを代替しない。`53eff59` でコミットされた先行AP03の採用記録（本書では変更しない）、旧試験・通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回はMDのみ。実装・実測・試験実行・build／梱包／展開・変異・process／保全操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
 ## 1 系列を開く前：G01〜04
 
@@ -22,7 +24,7 @@ draft-0.2のレビュー修正：レビュー修正の基準HEADは`7ad19c9`（�
 
 系列前の審査は入力指定と承認記録の照合まで。候補実体の読取・hash、先行保全の登録、領域確保は、許可された準備slot（SL01）の費用に含める。これらを無料の先行作業にせず、必要な先行保持と絶対時間枠を確保できなければSL01も起動0。未生成の成果物のdigestを先に要求する代わりに、その生成・照合手順と停止条件を事前に固定する。
 
-AP5-G01は[ED01〜07の候補仕様根拠・到達辺照合 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)、AP5-G02は[旧assertion・未代替保証・回復条件 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G02_OLD_ASSERTION_RECOVERY_DESIGN.md)で行ごとに整理した。どちらも未充足で、SL01は起動0のまま。
+AP5-G01は[ED01〜07の候補仕様根拠・到達辺照合 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)、AP5-G02は[旧assertion・未代替保証・回復条件 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G02_OLD_ASSERTION_RECOVERY_DESIGN.md)で行ごとに整理した。AP5-G03は[同一候補の固定項目と段階別pin draft-0.2](BEST_PRACTICE_RELEASE_AP05_G03_CANDIDATE_PIN_DESIGN.md)、AP5-G04は[候補検証の隔離・起動条件・終了と保全 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G04_EXECUTION_CUSTODY_DESIGN.md)で具体化した。いずれも未充足で、SL01は起動0のまま。
 
 ## 2 段階別pin：その時点で揃えるもの
 
@@ -71,4 +73,4 @@ AP5-G01は[ED01〜07の候補仕様根拠・到達辺照合 draft-0.2](BEST_PRAC
 
 ## 6 静的確認
 
-基準`aac5c47`で、§1のG01に挙げたAP02のS01〜07／K01〜04・入口ED01〜07・AP03のC05-B／C07-B／C02〜04案P／C06がコミット済みの文書にあり共通受入設計のG01と一致すること、AP5-G01〜04・T01〜04の行キーと名前が共通受入設計と一致すること、§2のSL01〜04・SL05〜15（P+）・SL16〜21（P0）・SL22の範囲がmanifestのSL行と一致すること、§4のR1〜R7の割当てが外側時間枠設計のAP5-C01〜07と、`t_i < D_obs` と `t_i + W_i < D_obs` の両方を要求する入場条件が同設計と一致すること、EV01／02／07とEV02〜10、FP01／02／04／08／10〜12の参照先が証拠受入設計・操作site設計の各行にあることを静的に照合し、`7162f0c`で§1末尾にG01・G02照合文書への参照を加えた。以下の数はdraft-0.3時点で、本書に新規IDはなく（G／T／SL／EV／FP／Rは他文書への参照キー）、表4・ローカル参照8（draft-0.2時点の6にG01・G02照合文書への各1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・計測・process／保全操作は行っていない。
+基準`aac5c47`で、§1のG01に挙げたAP02のS01〜07／K01〜04・入口ED01〜07・AP03のC05-B／C07-B／C02〜04案P／C06がコミット済みの文書にあり共通受入設計のG01と一致すること、AP5-G01〜04・T01〜04の行キーと名前が共通受入設計と一致すること、§2のSL01〜04・SL05〜15（P+）・SL16〜21（P0）・SL22の範囲がmanifestのSL行と一致すること、§4のR1〜R7の割当てが外側時間枠設計のAP5-C01〜07と、`t_i < D_obs` と `t_i + W_i < D_obs` の両方を要求する入場条件が同設計と一致すること、EV01／02／07とEV02〜10、FP01／02／04／08／10〜12の参照先が証拠受入設計・操作site設計の各行にあることを静的に照合し、`7162f0c`で§1末尾にG01・G02照合文書への参照を、`a191bfd`でG03・G04設計への参照を加えた。以下の数はdraft-0.4時点で、本書に新規IDはなく（G／T／SL／EV／FP／Rは他文書への参照キー）、表4・ローカル参照10（draft-0.2時点の6にG01〜G04の各設計への各1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・計測・process／保全操作は行っていない。

@@ -1,7 +1,9 @@
 # AP02：撤去対象と維持する通常経路の範囲基準
 
-Version: release-ap02-removal-scope-baseline-draft-0.2 / Date: 2026-11-19。
-Status: **対象範囲の設計基準。撤去・実装・旧試験の変更は未承認。** 読取り基準HEADは`2837181`。[AP02／03親設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)のR01〜08、K01〜06と[入口7件の引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)を、同revisionの定義／利用／停止・解放／成果物に結ぶ。AP03のC05-B＋C07-B、C02〜04の案P、C06の方針を前提とする。ただし、これらの採用記録は基準HEAD時点で未コミットであり、コミット済みの[C07比較設計](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)・AP02／03親設計のD04はなお未選択と記す。採用記録が確定するまで、AP02-S02のC07-B、AP02-S03の案Pの記述を採用済みの根拠として扱わない。具体patchの全到達辺・外部利用・実tarballは未確認で、閉包不在の証明ではない。
+Version: release-ap02-removal-scope-baseline-draft-0.3 / Date: 2026-11-19。
+Status: **対象範囲の設計基準。撤去・実装・旧試験の変更は未承認。** 読取り基準HEADは`2837181`。[AP02／03親設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)のR01〜08、K01〜06と[入口7件の引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)を、同revisionの定義／利用／停止・解放／成果物に結ぶ。AP03のC05-B＋C07-B、C02〜04の案P、C06の方針を前提とする。これらの採用記録は基準HEAD時点では未コミットで、当時の[C07比較設計](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)・AP02／03親設計のD04は未選択だった。採用記録は `53eff59` でコミットされ、採用判断の根拠は[C05／C07採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)と[C02〜04／06採用記録 draft-0.2](BEST_PRACTICE_RELEASE_AP03_C02_C04_C06_COMPATIBILITY_REVIEW.md)に置く。AP02-S02のC07-B、AP02-S03の案Pの記述は、その採用範囲の範囲設計として読む。具体patchの全到達辺・外部利用・実tarballは未確認で、閉包不在の証明ではない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`a191bfd`（修正時のHEADは`a191bfd`）。採用記録（C05／C07採用記録draft-0.4、C02〜04／06採用記録draft-0.2）が `53eff59` でコミットされたため、Status行の「未コミット」「確定するまで採用済みの根拠として扱わない」を基準HEAD時点の記述に改め、採用判断の根拠を同コミットの両記録に置いた。これに伴い§4のローカル参照数を17とし、数の時点と内訳を更新した。引渡し文書と親設計にある本書への参照ラベルもdraft-0.3に更新した。撤去範囲・維持境界・S01〜07／K01〜04の内容は変更しない。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`d30aebf`（修正時のHEADは`d30aebf`）。Status行でAP03の採用を「所与」としていたが、採用記録（C05／C07採用記録、C02〜04／C06レビュー）が未コミットで、コミット済みのC07比較設計・親設計D04は未選択のままだったため、「前提」と書き換えて採用記録の確定待ちであることを明記した。末尾に静的確認の記録を追加した。撤去範囲・維持境界・S01〜07／K01〜04の内容は変更しない。引渡し文書と親設計にある本書への参照（draft-0.1）は作業中の変更と重なるため、今回は更新していない。
 
@@ -44,4 +46,4 @@ AP02-K04のscopeは、残すownerから作る内部継続だけ。別rootでの�
 
 ## 4 静的確認
 
-基準`d30aebf`で、本文に実名で挙げたsession／source／lifecycleのシンボル、`review-bootstrap-contract`のimport元、PK01（canonical梱包検査）のfake I/O同梱期待と旧compiled ack起動、PK02（HTTP梱包検査）の`stop`→`#clearReleaseComparison`直接呼出し検査とrelease系値module 6件の同梱期待、`#openComposition`の省略時3引数呼出しを静的に照合した。本書のID11行（S7／K4）、表2・ローカル参照15・明示anchor0、ローカル参照先・表列数・末尾改行・差分空白を確認し、変更は本書1件のみ、stage0、製品・試験・設定の差分はない。製品module import・試験再実行・build／pack・実tarball確認は行っていない。
+基準`d30aebf`で、本文に実名で挙げたsession／source／lifecycleのシンボル、`review-bootstrap-contract`のimport元、PK01（canonical梱包検査）のfake I/O同梱期待と旧compiled ack起動、PK02（HTTP梱包検査）の`stop`→`#clearReleaseComparison`直接呼出し検査とrelease系値module 6件の同梱期待、`#openComposition`の省略時3引数呼出しを静的に照合した。本書のID11行（S7／K4）、表2・ローカル参照15（draft-0.2時点。draft-0.3でStatus行に採用記録2件を加え17）・明示anchor0、ローカル参照先・表列数・末尾改行・差分空白を確認し、変更は本書1件のみ、stage0、製品・試験・設定の差分はない。製品module import・試験再実行・build／pack・実tarball確認は行っていない。
