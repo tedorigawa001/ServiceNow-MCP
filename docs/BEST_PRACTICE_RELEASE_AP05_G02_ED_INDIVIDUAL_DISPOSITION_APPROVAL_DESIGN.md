@@ -1,8 +1,10 @@
 # AP05 G02：ED01〜07の個別処遇案・承認票
 
-Version: release-ap05-g02-ed-individual-disposition-approval-draft-0.1 / Date: 2026-11-20。
+Version: release-ap05-g02-ed-individual-disposition-approval-draft-0.2 / Date: 2026-11-20。
 
 Status: **審査案のみ。ED01〜07の個別処遇は全件未選択、個別承認は全件未承認。G02は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準 `8bf7fb5` とAP03採用記録の `53eff59` は文書根拠であり、製品候補ではない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`781c9b6`（修正時のHEADは`32a24ae`）。本書の後に追加された横断審査表とED01〜07の回復先行案へ、本書から到達できなかったため、§3の記入欄の後に横断審査表への参照を加えた（各回復先行案へは同表の§2から参照する）。各票の処遇・承認欄と審査順は変更していない。
 
 [G02旧assertion・回復条件](BEST_PRACTICE_RELEASE_AP05_G02_OLD_ASSERTION_RECOVERY_DESIGN.md)の7行を、[AP01残差台帳](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)のA1-I02／P01〜10に結び、処遇の比較と一件ずつ採否を決めるための欄を設ける。[G01照合表 draft-0.4](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)の採用方針は入力・型／import境界の根拠に限り、切る／残す辺の未確認、旧保証の未代替、実行許可を埋めない。旧caseの正規分類は7件とも未対応のまま。
 
@@ -50,6 +52,8 @@ Status: **審査案のみ。ED01〜07の個別処遇は全件未選択、個別�
 | A1-P05〜06：所有・回復 | §2の役割を基に引受担当、診断／停止／失効／未確認cleanupの保持先、同位置・同一性・正負対照・compiled／配布物・終了確認、再レビュー条件。人の担当・期限、観測や保全の方式・保全先・数値は未承認／未確定 |
 | A1-P07〜08：処遇と受容条件 | 維持／回復先行／非提供の個別審査／受容不可・停止のいずれか。非提供案を選ぶ場合は外部説明案・未代替保証・通常Kと許容しない影響・将来回復条件を明示。理由・選択・受容はいずれも未記入 |
 | A1-P09〜10：決裁・他の承認 | 承認者・承認日・採否と根拠・対象revision／assertion・除外条件・他の許可への参照。個別処遇は未承認。AP02実装、AP05候補検証、AP05旧試験切替、AP04の結果差、AP06公開は別判断 |
+
+7票へ渡す共通正対照・各票固有の不足は[ED01〜07回復先行案の横断審査表](BEST_PRACTICE_RELEASE_AP05_G02_ED_RECOVERY_CROSS_REVIEW_DESIGN.md)で整理し、各EDの回復先行案は同表§2から参照する。同表は処遇の選択・承認ではなく、上の欄を埋めない。
 
 ## 4 G02への受渡しと停止条件
 

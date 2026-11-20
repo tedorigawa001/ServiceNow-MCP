@@ -1,8 +1,10 @@
 # AP05 G02：ED06／ACK-36 閲覧承認前の不足証拠・確認順序
 
-Version: release-ap05-g02-ed06-ack36-external-usage-preapproval-evidence-checklist-draft-0.1 / Date: 2026-11-20。
+Version: release-ap05-g02-ed06-ack36-external-usage-preapproval-evidence-checklist-draft-0.2 / Date: 2026-11-20。
 
 Status: **事前確認の手順案のみ。実資料は未指定・未閲覧、外部利用はUnknown。ED06の処遇は未選択・未承認、閲覧は未承認・閲覧0。候補revision・digest・観測手段は未確定。数値・保全方式・保全先は未承認。G02未充足、SL01は起動0。**
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`781c9b6`（修正時のHEADは`32a24ae`）。本書の後に追加された段階1〜4の様式（`0decbc2`〜`781c9b6`）が前段の様式からしか参照されず、段階4にはコミット済み文書からの参照がなかったため、§1の表の後に4段階の様式への参照を加えた。確認順序・各段階の閲覧0条件・停止点は変更していない。
 
 [個別承認票案draft-0.2](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_LIMITED_REVIEW_APPROVAL_DESIGN.md)（`e18cce4`）の§1・§3と、[資料候補・閲覧前確認条件draft-0.1](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_MATERIAL_PRECHECK_DESIGN.md)を基準に、空欄の証拠と最初の停止点を整理する。参照コミットはrepo内の文書の版であり、製品候補や外部資料の版ではない。この手順案は資料の選定、提供、閲覧、記録／保持やED06の処遇を承認しない。
 
@@ -18,6 +20,8 @@ Status: **事前確認の手順案のみ。実資料は未指定・未閲覧、�
 | 4. 秘匿化 | 提供側の指定役割による確認参照と、段階3で固定した抜粋版との対応が未記入。本文・ファイル名・履歴・埋込み等に機密や個人情報を残さず、`synthetic_io` の省略と明示 `undefined`、転送・呼出し位置、例外の捕捉・後始末の境界を判別できるという確認を同じ版に結ぶ | 確認参照がない、別版の確認しかない、機密等の残存を否定できない、または秘匿化で判定に必要な境界が失われていれば閲覧0。閲覧側が原本を取り寄せて再加工したり、見えない箇所を省略や後始末なしとみなしたりしない |
 
 **現時点の停止点は段階1（対象資料未指定）**。段階2〜4の証拠欄も空欄だが、実資料に対して確認した結果ではなく、すべて未確認。本文・原本・プレビューを開くことや、内容を読み取って照合値を算出することは、事前のメタ情報照合に含めない。差し替え・再秘匿化は別版として再申請し、対象・権限・版・秘匿化の対応を再確認する。
+
+各段階の様式は、[段階1：対象資料の絞り込み・匿名対応](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_STAGE1_MATERIAL_SCOPE_DESIGN.md)、[段階2：提供権限・操作別許可](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_STAGE2_PROVISION_AUTHORITY_DESIGN.md)、[段階3：版固定・差し替え停止](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_STAGE3_VERSION_PIN_DESIGN.md)、[段階4：秘匿化確認・閲覧0](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_STAGE4_REDACTION_CONFIRMATION_DESIGN.md)にある。いずれも様式案で、証拠欄は未記入、閲覧0のまま。
 
 ## 2 停止時の記録と個別承認への受渡し
 

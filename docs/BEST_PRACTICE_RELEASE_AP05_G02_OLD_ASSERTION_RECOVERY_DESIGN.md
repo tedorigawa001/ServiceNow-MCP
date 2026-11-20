@@ -1,13 +1,15 @@
 # AP05 G02：ED01〜07の旧assertion・未代替保証・回復条件
 
-Version: release-ap05-g02-old-assertion-recovery-draft-0.2 / Date: 2026-11-20。
+Version: release-ap05-g02-old-assertion-recovery-draft-0.3 / Date: 2026-11-20。
 Status: **静的整理のみ。G02は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 読取り基準 `ef6be90` は文書・旧test照合用で、製品候補ではない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`781c9b6`（修正時のHEADは`32a24ae`）。`99066f7`〜`781c9b6`で追加されたED01〜07の個別処遇案・承認票と横断審査表へ、本書を含むコミット済みのAP05文書から到達できなかったため、§2末尾に両文書への参照を加えた。冒頭の「先行AP03の未コミット差分5ファイル」は `53eff59` でコミットされたため、その旨に改めた。これに伴い§4のローカル参照数を22とし、数の時点を更新した。各ED行・判定は変更していない。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`7162f0c`（修正時のHEADは`7162f0c`）。AP01残差台帳への参照がA1-P01〜09で、§2の承認分離に対応する「A1-P10 他AP」（AP02撤去・AP03互換・AP04結果差・AP05旧試験・AP06公開への影響は別承認）を落としていたため、A1-P01〜10とした。§4に静的確認を追加し、候補入場設計draft-0.3から本書への参照を加えた。各ED行・判定は変更していない。
 
 [AP05候補入場条件](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)のAP5-G02を、[G01の仕様根拠・到達辺照合](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)と[AP01残差台帳](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)のA1-I02、A1-X01〜03、A1-R02／05、A1-P01〜10に結ぶ。ED01〜07は既存の入口7件。正規分類は全件未対応、将来の個別処遇は未選択、保証低下の受容は未承認。現行の旧試験・期待値・故障位置の維持は既定の扱いであって、将来の処遇やfriend撤去の承認ではない。
 
-先行AP03の未コミット差分5ファイル、通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回は本MDのみ。実装・実測・試験実行・build／梱包／展開・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
+`53eff59` でコミットされた先行AP03の採用記録（本書では変更しない）、通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回は本MDのみ。実装・実測・試験実行・build／梱包／展開・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
 ## 1 ED01〜07：元の観測、残差、引受先、回復条件
 
@@ -35,6 +37,8 @@ AP01の個別票には、元ID・revision／入力・直接assertion・失われ
 | AP05候補検証 | 旧Hを維持した別のPの対象・許可操作・entry／対照・禁止範囲。G01仕様、G02処遇／許可、G03段階別pin、G04終了四軸・通常枠／cleanup予約・残存責務の根拠 | 限定対照の個別承認や候補patchの許可は候補検証を代替しない。旧試験切替の承認は検証前に要求しないが、旧試験の維持と影響行の検証時の扱いは固定する。必要証拠・承認が欠ければ起動0 |
 | AP05旧試験切替 | 旧ID・故障位置・assertion単位でHと移行先を対応付け、承認済み版の独立正負対照・compiled等の成果物・確認済み終了、新旧の残差／個別処遇／回復条件を提示。切替対象となる試験・fixture・期待値を限定 | Pの不在・Dの成功・候補検証許可だけで旧Hを削除／skip／改変しない。未代替はAP01の個別判断を別に要し、処遇・証拠が不足なら旧試験を維持。公開・AP06は別承認 |
 
+ED01〜07の個別票は[個別処遇案・承認票](BEST_PRACTICE_RELEASE_AP05_G02_ED_INDIVIDUAL_DISPOSITION_APPROVAL_DESIGN.md)に、7件の回復先行案の横断照合は[横断審査表](BEST_PRACTICE_RELEASE_AP05_G02_ED_RECOVERY_CROSS_REVIEW_DESIGN.md)にまとめている。いずれも処遇は未選択・未承認で、本節の3つの承認を代替しない。
+
 ## 3 回復判定と現時点の停止
 
 - **回復と認める範囲を固定する。** 元入力・元の注入／停止位置・同session／source／slot・元assertion・元期限を先に記録する。同じ障害の判別では比較する正対照と負対照を分け、元source／対象compiled artifact・終了確認を揃えてから行単位で再レビューする。旧経路を非提供にする場合、P側で確認した「通常が動く／禁止入口に到達しない」は別の保証として記録し、旧経路の不具合検出が回復したとは書かない。
@@ -43,4 +47,4 @@ AP01の個別票には、元ID・revision／入力・直接assertion・失われ
 
 ## 4 静的確認
 
-基準`ef6be90`で、AP01残差台帳のA1-I02・A1-X01〜03・A1-R02／05・A1-P01〜10、NS02のN2-X07／X08／R11（ACK-34〜36）、NS05のN5-C04（CR04）の各行、旧testの直接assertion（SA-25のcapture未呼出しと `requests` 0、ACK-34の `chargePayload('x')` 後のpayload 1、ACK-35のclass staticへの `claimCompositionSource` 設置、ACK-36のprototype `bindReviewReleaseSource` のno-op置換と `internal_review_error` 拒否、CR04の3 callback未呼出し）、[FX04](../tests/review/fixtures/compiled-source-status-binding.mjs)のhasOwnと `code` 検査、[FX03](../tests/review/fixtures/compiled-native-session-composition.mjs)のhasOwnと正規表現検査を静的に照合した。以下の数はdraft-0.2時点で、本書に新規IDはなく（ED／A1／N2／N5／S／K／FXは他文書への参照キー）、表2・ローカル参照20（重複を除き15）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。
+基準`ef6be90`で、AP01残差台帳のA1-I02・A1-X01〜03・A1-R02／05・A1-P01〜10、NS02のN2-X07／X08／R11（ACK-34〜36）、NS05のN5-C04（CR04）の各行、旧testの直接assertion（SA-25のcapture未呼出しと `requests` 0、ACK-34の `chargePayload('x')` 後のpayload 1、ACK-35のclass staticへの `claimCompositionSource` 設置、ACK-36のprototype `bindReviewReleaseSource` のno-op置換と `internal_review_error` 拒否、CR04の3 callback未呼出し）、[FX04](../tests/review/fixtures/compiled-source-status-binding.mjs)のhasOwnと `code` 検査、[FX03](../tests/review/fixtures/compiled-native-session-composition.mjs)のhasOwnと正規表現検査を静的に照合した。draft-0.3で§2末尾に個別処遇案・承認票と横断審査表への参照を加えた。以下の数はdraft-0.3時点で、本書に新規IDはなく（ED／A1／N2／N5／S／K／FXは他文書への参照キー）、表2・ローカル参照22（重複を除き17。draft-0.2時点の20（同15）に上記2件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。
