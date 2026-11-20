@@ -94,14 +94,14 @@
   },
   "license": "MIT",
   "overrides": {
-    "@hono/node-server": "^2.0.11",
+    "@hono/node-server": "^2.1.6",
     "body-parser": "^2.3.0",
     "fast-uri": "^3.1.8",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "ip-address": "^10.7.3",
     "js-yaml": "^4.3.2",
     "proxy-addr": "^2.0.8",
-    "qs": "^6.16.0",
+    "qs": "^6.16.1",
     "source-map-js": "^1.2.2",
     "minimatch@3": {
       "brace-expansion": "^1.1.21"
@@ -132,10 +132,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
-    "@typescript-eslint/eslint-plugin": "^8.71.0",
-    "@typescript-eslint/parser": "^8.71.0",
+    "@typescript-eslint/eslint-plugin": "^8.73.0",
+    "@typescript-eslint/parser": "^8.73.0",
     "@vitest/coverage-v8": "^5.0.3",
-    "eslint": "^10.12.0",
+    "eslint": "^10.15.0",
     "exceljs": "^4.4.0",
     "globals": "^17.13.0",
     "tsx": "^4.23.15",
