@@ -1,7 +1,7 @@
 # AP03 C07：source constructorの第3引数・互換差と拒否境界
 
-Version: release-ap03-c07-source-constructor-argument-draft-0.1 / Date: 2026-11-19。
-Status: **比較案。仕様選択・互換変更・撤去は未承認。** 基準HEADは`16271eb`。[AP02／03設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)のC07／D04と[入口7件の引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)のED01／04／05／07を具体化する。C05のoptions継承／Proxy、C02〜04のsynthetic入力、C06のimport面、AP05の旧試験処遇は別判断。AP01〜06は未承認のまま。
+Version: release-ap03-c07-source-constructor-argument-draft-0.2 / Date: 2026-11-19。
+Status: **比較と採用の記録。C07-Bの第3引数の扱いを採用。撤去・実装は未承認。** 比較の基準HEADは`16271eb`。[AP02／03設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)のC07／D04と[入口7件の引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)のED01／04／05／07を具体化する。C05との組合せは[C05／C07の採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)を参照。C02〜04／06・旧試験処遇とAP03全体の承認は別。
 
 通常経路未切替・正式発行口／C実行入口／body起動閉鎖・全体受付無効・Unknown・調査保留と、既存期限・既定並列度を維持する。今回の変更はMDのみ。実装・発行／claim消費・旧試験変更／再実行・build／pack・実接続・実通信・実機操作・設定変更・公開・コミット・Pushは行わない。
 
@@ -24,7 +24,7 @@ Status: **比較案。仕様選択・互換変更・撤去は未承認。** 基�
 | 第3 = key getter付きobject／Proxy／関数 | truthyで`key`評価あり。getter／trapの例外は固定codeとは限らない | getter／trapに触れず拒否 | 同左。undefinedとの厳密比較のみで値を調べない |
 | 第3 = `undefined`、第4あり（第4が`undefined`でも） | 第4以降は未参照 | 拒否 | 拒否。第4の値を読まない |
 
-判断軸は「明示undefinedを渡す既存JSの互換性を残す価値」と「3引数以上を一律に閉じる契約の単純さ」。リポジトリ内の既知呼出し点だけでは外部ラッパー／直接import利用の有無は分からない。出力宣言の引数数、JS実行時の受付、constructorの反射的な`length`の観測は別に記録する。候補を選択する前に余剰引数の範囲と非提供告知を提示し、採用案・承認者・日付は未記入とする。
+判断軸は「明示undefinedを渡す既存JSの互換性を残す価値」と「3引数以上を一律に閉じる契約の単純さ」。リポジトリ内の既知呼出し点だけでは外部ラッパー／直接import利用の有無は分からない。出力宣言の引数数、JS実行時の受付、constructorの反射的な`length`の観測は別に記録する。比較時は未選択だった。採用はBと4個以上拒否の範囲で、余剰引数の詳細な非提供告知・外部利用影響は別審査。
 
 ## 3 拒否点と非介在の上界
 
@@ -36,9 +36,9 @@ Status: **比較案。仕様選択・互換変更・撤去は未承認。** 基�
 
 | ID | 受入条件（未実施） | 停止条件／引渡し |
 |---|---|---|
-| C07-V1 | 承認案の全セルをJSの直接newと引数転送を代表する`Reflect.construct`で確認。2引数の同期生成、明示undefined相当、4個以上、固定同期codeを分離する。型エラーは別の対照 | JSの拒否をTSの引数エラーで置き換えない。通常2引数の退行、第3／第4の仕様未選択なら停止 |
+| C07-V1 | 承認案の全セルをJSの直接newと引数転送を代表する`Reflect.construct`で確認。2引数の同期生成、明示undefined相当、4個以上、固定同期codeを分離する。型エラーは別の対照 | JSの拒否をTSの引数エラーで置き換えない。通常2引数の退行、承認された第3／第4引数の仕様との不一致があれば停止 |
 | C07-V2 | getter／Proxy／旧callbackの個別カウンタ0、既存sessionの診断・requests／payload等の前後不変、同sessionの後続正常利用を独立に検査。通常2引数または許容undefinedを比較対象にする | 資源未生成をrequests=0だけから推定しない。新friend／公開inspect口で試験しない。元試験の直接assertに観測を遡及加算しない |
 | C07-V3 | 共有呼出しの省略時同期summaryと通常source／Permit・fetch・停止／closeを正対照にする。省略時の初期source binding、transport claim、C/G/P=0、予約返却・固定close・dispatch unavailableを維持 | 旧[省略時テスト](../tests/review/private-composition.test.ts)を期待値変更で通さない。旧callbackを消す過程で共有結合を失うならAP02へ戻す |
 | C07-V4 | 候補の同revisionでJS／宣言／mapと隔離配布物を検査し、外部claim・callbackの不在と通常import成功を対にする。旧SA-25／ACK-34・35／CR04は元実classの対照として保持 | 入口不在は旧guardの実行同等性ではない。単なる依存欠落は不在成功にしない。切替・旧試験処遇・配布物検証はAP02／05の別承認 |
 
-AP03で先に決めるのは、明示undefinedの互換幅と4個以上の扱い、同期codeと非介在の境界。次にAP02で共有呼出しの2引数化と結合維持、AP05で元assertionと候補artifactの試験境界を対にする。AP03の選択だけで実装・撤去・公開へ進まない。
+ユーザー指示によりC07-Bを採用した（[C05／C07の採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)）。次にAP02で共有呼出しの2引数化と結合維持、AP05で元assertionと候補artifactの試験境界を対にする。C07の採用だけで実装・撤去・公開へ進まない。

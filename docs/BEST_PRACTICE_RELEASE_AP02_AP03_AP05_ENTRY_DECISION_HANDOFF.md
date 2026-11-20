@@ -1,7 +1,7 @@
 # AP02／03／05：入口7件の個別判断への引渡し
 
-Version: release-entry-decision-handoff-draft-0.2 / Date: 2026-11-19。
-Status: **未承認の判断材料。現行仕様・旧試験を維持。** 基準HEADは `b1b594c`。[AP01残差台帳 draft-0.14](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)で文書照合した入口7件を、[AP02／03設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)の撤去・互換案とAP05の旧試験／配布物の処遇へ渡す。正規228件のうち文書対応166（閉鎖lane158・入口7・通常維持1）、別gate UN62。入口7件の正規分類は全て**未対応**であり、同等移行・保証回復・個別承認は0件追加。
+Version: release-entry-decision-handoff-draft-0.6 / Date: 2026-11-19。
+Status: **AP03のC05-B＋C07-B、C02〜04の案PとC06の互換方針を採用。現行実装・旧試験を維持。** 基準HEADは `b1b594c`。[AP01残差台帳 draft-0.14](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)で文書照合した入口7件を、[AP02／03設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)の撤去・互換案とAP05の旧試験／配布物の処遇へ渡す。正規228件のうち文書対応166（閉鎖lane158・入口7・通常維持1）、別gate UN62。入口7件の正規分類は全て**未対応**であり、同等移行・保証回復・旧case処遇の個別承認は0件追加。
 
 正式発行口・C実行入口／body起動は閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較childと製品全体の60秒・元attempt floorは変更しない。実装・旧試験変更／再実行・設定変更・実接続・実通信・実機操作・配布／公開・コミット・Pushは行わない。
 
@@ -19,18 +19,20 @@ Status: **未承認の判断材料。現行仕様・旧試験を維持。** 基�
 | ED06／[ACK-36](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-ack-36)・[元ACK](../tests/review/private-composition-ack.test.ts) | `bindReviewReleaseSource`をno-opへ置換したsynthetic runがPromiseをcode=internal_review_errorで拒否 | R04／07。専用laneを切っても、実source／Permit／port／登録ownerの照合を成功風hookで置き換えない。通常のbind境界を一括撤去しない | C02／06／08。synthetic入口の同期拒否やDのunknown／withheldでは、bind欠失後の旧Promise拒否を回復しない（AP04も別） | 旧fault位置を保持。FX05の同fault収録を前提にせず、Pで通常の実bindingと偽成功だけでは通らない対照、旧synthetic preparedの残差を別欄に置く |
 | ED07／[CR04](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#cr04)・[元CR](../tests/review/release-comparison-receipt-session.test.ts) | 推測key付きsourceが同期invalid_input、capture／observeReleaseUtc／acceptReleaseObservationが全未呼出し | R02／03。外部観測receiver／callbackを切る候補。通常sourceの観測・時刻ownerを残す | C07。第3引数拒否・非採用の仕様と、通常sourceの観測動作を分ける | 旧4点保持。将来のcallback非実行と通常の観測の正対照を対にし、Dのschema拒否を同field・同clock位置の代替にしない |
 
-## 2 選択前に揃える必要証拠と停止条件
+## 2 互換方針の採用後に揃える必要証拠と停止条件
 
-1. **AP03の未選択セルを先に確定する。** C07は通常2引数、明示undefined、null、false、旧creation object、getter付きobjectの「受付／同期結果／拒否位置／callback・元sessionへの影響」を分ける。引数個数で拒否する案と非undefined値を拒否する案のどちらを採るかは未決。C05の継承・Proxy・prototype、C02〜04のsynthetic own key・複合不正の理由優先、C06の型／JS named・namespace・deep importの観測も個別に判断する。開発rootでの成功や現行の型エラーだけから、外部互換性を推定しない。
+1. **採用済みAP03方針を後続の対照へ渡す。** C05-B／C07-Bと、[C02〜04／06の採用記録 draft-0.2](BEST_PRACTICE_RELEASE_AP03_C02_C04_C06_COMPATIBILITY_REVIEW.md)の外側受付優先・型／importの互換差を別々に照合する。外部利用・具体的な撤去対象・検証結果は未確認で、開発root成功や現行の型エラーだけから互換性を推定しない。
 2. **AP02の対象閉包を同revisionで固定する。** 定義・登録slot・static／reexport／動的参照・生成／解放責務・JS／宣言／map・通常K01〜06を結ぶ。外部claimを切ることと、通常2引数source、同session／ownerの一度結合・Permit、既存fetch・会計・停止・省略時同期summaryを残すことを同じ候補で確認する。共有経路の所有者や影響が不明ならUnknownで停止し、設定・期限で通さない。
 3. **AP05の試験処遇と配布物の負対照を分離する。** [PK01〜04](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)と[B-03のFX03〜06](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)を基準に、旧fixtureの元assertion、Pの通常正対照／到達不能確認、別artifactの連続試験を対応付ける。現行PK02は指定ファイルの除外と配布外distの旧fixtureを検査する。候補では空buildと隔離tarballを同revisionで結び、通常import成功、禁止閉包不在、別名／再export／stale JS・宣言・map混入の意図した失敗を別々に要求する。必要kernel欠落や検査未起動を不在成功にしない。旧試験削除・skip・期待値変更・梱包設定変更は別承認まで行わない。
 
-[C07比較設計 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)でED01／04／05／07の第3引数と共有呼出しの影響、同期拒否・通常2引数の受入条件を分離した。ACK-34のcreation内keyのvariantを第3引数そのものには読み替えない。採用仕様・実施結果・旧試験の処遇は未決のまま、C05は別途比較する。
+[C07比較設計 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)でED01／04／05／07の第3引数と共有呼出しの影響、同期拒否・通常2引数の受入条件を分離した。ACK-34のcreation内keyのvariantを第3引数そのものには読み替えない。比較時点の記録であり、採用仕様は次段、実施結果と旧試験の処遇は別。
+
+[C05／C07の採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)で、外側Proxyの反射前拒否／非Proxyのown-only維持と、C07のJS明示undefinedの例外を採用した。C02〜04／06は後続の採用記録を参照し、撤去・旧試験処遇・配布判定は別審査。
 
 [AP02の撤去範囲基準 draft-0.1](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)に、実名の撤去境界・残す通常結合と、PK01〜03／FX03〜06の現行期待との衝突を記録した。対象patch・AP05の処遇・配布結果は未実施。入口7件の旧試験・保証分類を変更しない。
 
 ## 3 判断の記録
 
-ED01〜07の各行に、対象revision／候補patch、AP02で切る辺と維持K契約、AP03の選択と観測差、AP05で残す元assertion・候補artifact・正負対照、残差ownerと将来回復条件、承認者／日付／除外条件を結ぶ。**候補patch・選択・実施結果・承認は未記入**。旧試験維持、AP01の保証低下受容およびAP04の結果差も別票。FR6は別索引、UN62はB-03、通常並列と最終配布判定はAP06へ残し、入口7件の文書対応で繰り上げない。
+ED01〜07の各行に、対象revision／候補patch、AP02で切る辺と維持K契約、AP03の選択と観測差、AP05で残す元assertion・候補artifact・正負対照、残差ownerと将来回復条件、承認者／日付／除外条件を結ぶ。**D03／D04とC06の方針のみ採用。候補patch・実施結果・各case処遇の承認は未記入**。旧試験維持、AP01の保証低下受容およびAP04の結果差も別票。FR6は別索引、UN62はB-03、通常並列と最終配布判定はAP06へ残し、入口7件の文書対応で繰り上げない。
 
 静的確認は、元テスト・正規case／参照・親文書との対応を対象とした。製品module import・friend取得、build／test／pack、実process対照、撤去後の不在証明は実施していない。 7行の正規分類・元assertion、3MDの表11・ローカル参照72・明示anchor参照22、差分空白・stage0を確認した。

@@ -1,7 +1,7 @@
 # AP02／AP03：friend閉包の撤去範囲・通常経路維持と入力／返却互換性
 
-Version: release-ap02-ap03-removal-compatibility-draft-0.3 / Date: 2026-11-19。
-Status: **個別承認用の設計案。撤去・互換変更・保証低下・旧試験の処遇は未承認。** 静的読取り基準HEADは`b0d6055`。今回の「具体化」は判断材料のMD化に限り、AP02／03の承認・実装開始を意味しない。
+Version: release-ap02-ap03-removal-compatibility-draft-0.8 / Date: 2026-11-19。
+Status: **個別承認用の設計。AP03のC05-B＋C07-B、C02〜04の案P、C06の互換方針を採用。AP02／03全体・撤去・実装・保証低下・旧試験の処遇は未承認。** 静的読取り基準HEADは`b0d6055`。採用は記載の互換方針に限り、撤去対象・実装の承認を意味しない。
 
 正式発行口閉鎖・通常経路未切替・C実行入口／body起動閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較child60秒・製品全体60秒・元attempt floorは変更しない。実装・発行／claim消費・試験変更／再実行・build／pack・採取／保管・実process対照・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
 
@@ -18,7 +18,7 @@ Status: **個別承認用の設計案。撤去・互換変更・保証低下・�
 | A23-E05 | [fake I/O](../src/servicenow/review-composition-fake-io.ts)・[package設定](../package.json)・[build設定](../tsconfig.json) | fake I/Oをruntime sessionが直接importし、現buildはsrc→distへJS／宣言／mapを出す。packageのprobe除外だけではclass内friendを消せない。設定は評価／変更しない |
 | A23-E06 | [維持／移行レビューGT・AD・PK](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)・[B-03](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md) | 元assertion・P/U/D/I/H・compiled／梱包の責務分離を継承。source検索を全閉包・外部互換性の完全調査としない |
 
-撤去の承認単位は「同revisionの対象閉包＋維持境界＋意図的な互換差＋影響case／artifact＋未代替保証の処遇」とする。exportの名前だけ、群の成功件数だけ、AP番号だけでは承認しない。以下の状態はすべて**候補・未承認**であり、削除済み・回復済みという欄はない。
+撤去の承認単位は「同revisionの対象閉包＋維持境界＋意図的な互換差＋影響case／artifact＋未代替保証の処遇」とする。exportの名前だけ、群の成功件数だけ、AP番号だけでは承認しない。撤去自体はすべて**候補・未承認**であり、削除済み・回復済みという欄はない。
 
 ## 2 AP02：撤去候補と残す所有境界
 
@@ -54,28 +54,32 @@ K06は「何も生成しない入口」ではない。新規session・同owner�
 
 ## 4 AP03：入力・返却・例外時点の差分
 
-次は**現sourceの静的分岐**と**未承認の候補仕様**の比較で、元testが全行を直接assertしている表ではない。現行methodはasync宣言ではなく、syntheticなしは同期値、fake pin成功後のlaneだけPromiseを返す。
+次は**現sourceの静的分岐**と**採用した互換方針および他の候補**の比較で、元testが全行を直接assertしている表ではない。現行methodはasync宣言ではなく、syntheticなしは同期値、fake pin成功後のlaneだけPromiseを返す。
 
 | ID | 入力／利用位置 | 現在読める契約 | 変更候補・個別判断点 |
 |---|---|---|---|
 | A23-C01 | options省略／undefined／許可されたsignal・limitsだけ | 同期ConstructorSummary。入力／構築失敗は同期throw。許可snapshot等をpinし新規生成・固定close | K06を維持。method全体をasync化してPromiseへ変えない |
-| A23-C02 | own data propertyのsynthetic_ioに正しい固定transcript | options／signal→snapshot／oauth pin→input検査→fake pin／copy→session生成。その後Promise<PreparedSummary>。成功はprepared_only、失敗はPromise拒否 | own keyを未知入力として固定invalid_inputで**同期throw**する候補。正常prepared Promiseの廃止・.then／catch／await／tryの観測差を承認対象にする。候補を採用した場合もD成功値へ置換しない |
-| A23-C03 | own synthetic_io=undefined／null／false／0／空文字／不正transcript | fields.synthetic_ioは値ではなくdescriptor。keyがあればfake pinに入り、到達すればinvalid_inputを同期throw。先行signal／snapshot／inputエラーが優先する場合がある | keyの存在で拒否する候補。truthiness判定で省略扱いにしない。snapshotやinputが不正な場合との優先順変更も承認範囲 |
-| A23-C04 | synthetic_ioのown getter／setter、未知own key・symbol、options=null等 | descriptor検査等でinvalid_input。descriptor取得自体の挙動とgetter値読取りを混同しない | own accessorを呼ばず拒否する候補。symbol・未知key拒否とK06の許可fieldを維持。proxy等の細部はC05へ分離 |
-| A23-C05 | 継承synthetic_io、prototypeを持つoptions、Proxy options | 現optionsはtypeof objectとown descriptorを調べ、snapshot用pinDataObjectと同じstrict plain-object検査ではない。継承fieldはown一覧に入らず、Proxyはdescriptor取得時trapが動き得る | 継承keyの扱い・Proxyをtrap前拒否するか・prototype制約を加えるかは**未選択**。現挙動の静的事実を安全性保証にせず、synthetic own keyの撤去に紛れて無断で変えない。固定方針が決まるまで実装gateは閉鎖 |
-| A23-C06 | TypeScript import・overload・返値型、JS／deep import・namespace参照 | synthetic overloadとCompositionFakeIO依存、2取得関数・claim export・source第3引数の型／実体がsourceにある。外部利用実態はUnknown | synthetic overload／専用型依存と取得exportを宣言からも削除する候補。名前付きESM importはlink時失敗、namespace上の不在はプロパティ不在となり、旧2回目takeのruntime codeと非同等。同期invalid_inputだけで全互換影響を説明しない |
-| A23-C07 | JSからsource constructorへ第3引数creationを渡す | truthy creationはclaim／callback branch、falsy creationはそのbranchを通らない。現行のguess key拒否は旧私有結合に依存 | 型の第3引数を消すだけではJS余剰引数を拒否できない。引数個数で拒否する案と非undefined値を拒否する案、明示undefined／null／falseの扱いは**未選択**。いずれもcallbackを実行・保持せず、通常2引数を維持。constructor冒頭の固定拒否位置を承認前に確定 |
+| A23-C02 | own data propertyのsynthetic_ioに正しい固定transcript | options／signal→snapshot／oauth pin→input検査→fake pin／copy→session生成。その後Promise<PreparedSummary>。成功はprepared_only、失敗はPromise拒否 | **P採用**。禁止own keyは外側受付で固定invalid_inputを同期throw。正常prepared Promise・旧後段拒否を返さず、Dの成功値へも置換しない |
+| A23-C03 | own synthetic_io=undefined／null／false／0／空文字／不正transcript | fields.synthetic_ioは値ではなくdescriptor。keyがあればfake pinに入り、到達すればinvalid_inputを同期throw。先行signal／snapshot／inputエラーが優先する場合がある | **P採用**。値ではなくown keyの存在で拒否。複合不正でもsignal値／snapshot／target等の先行検査を開始せず、外側受付を優先 |
+| A23-C04 | synthetic_ioのown getter／setter、未知own key・symbol、options=null等 | descriptor検査等でinvalid_input。descriptor取得自体の挙動とgetter値読取りを混同しない | **P採用**。own accessor・未知key・symbolを値読取りなしで固定拒否し、通常の許可fieldは維持。外側ProxyはC05-Bで反射前に拒否 |
+| A23-C05 | 継承synthetic_io、prototypeを持つoptions、Proxy options | 現optionsはtypeof objectとown descriptorを調べ、snapshot用pinDataObjectと同じstrict plain-object検査ではない。継承fieldはown一覧に入らず、Proxyはdescriptor取得時trapが動き得る | **B採用**。非Proxyの独自prototypeを許容し、own dataのsignal／limitsのみ使う。継承値は読まず、外側Proxyを反射／trap前に同期invalid_inputで拒否。複合不正はC02〜04の採用案Pに接続する設計。実装は別審査 |
+| A23-C06 | TypeScript import・overload・返値型、JS／deep import・namespace参照 | synthetic overloadとCompositionFakeIO依存、2取得関数・claim export・source第3引数の型／実体がsourceにある。外部利用実態はUnknown | **互換方針採用**。通常の型／importは維持し、専用の宣言依存・旧名・廃止モジュールの扱いを別々に告知／検査する。削除名・module・到達辺の確定はAP02、外部影響はUnknown |
+| A23-C07 | JSからsource constructorへ第3引数creationを渡す | truthy creationはclaim／callback branch、falsy creationはそのbranchを通らない。現行のguess key拒否は旧私有結合に依存 | **B採用**。通常2引数と、JSで明示undefinedの第3引数1個だけを許容。その他の第3値・4個以上は同期invalid_input。内部通常呼出しを2引数化し、callbackを読まない。撤去・実装は別審査 |
 | A23-C08 | fake lane内のthrow／取消／期限／HTTP失敗とreject／unknown／withheld | fake pin後のPromise側故障と、入口の同期throwは別。Dの非実行draft summaryは別owner／別返値 | 撤去で元laneのfailureを一律unknown成功へ変換しない。AP04の非同等性・AP01の未代替保証を別審査。通常sourceのunknown／mismatchedはK03／04で維持 |
 
-[C07の第3引数・互換差と拒否境界 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)に、3個以上拒否と明示undefinedの3個だけ許容の比較、共有の省略時呼出しが現状3引数になる点、型とJS受付・emit順・通常正対照を分けて記録した。第3／第4引数の採用仕様・C05は未選択で、C07の比較は撤去・互換変更・旧試験処遇の承認ではない。
+[C07の第3引数・互換差と拒否境界 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)に、3個以上拒否と明示undefinedの3個だけ許容の比較、共有の省略時呼出しが現状3引数になる点、型とJS受付・emit順・通常正対照を分けて記録した。比較時点では未選択だった。採用仕様は次段を参照し、撤去・旧試験処遇とは分ける。
 
-### 副作用前拒否の候補境界
+[C05／C07の採用記録 draft-0.4](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)に、ユーザー指示によるC05-B＋C07-Bの採用範囲を記録した。own synthetic_ioは受け付けず、通常の同期summaryを維持する。後続のC02〜04／06の採用範囲は下記を参照。撤去と実装は未承認。
 
-候補C02／03は「既に生成したrunを止める」ではなく、options形状の安全な確認後、snapshot／oauth列挙・policy provider／時計呼出し、input検査、fake bytes取得／copy、session／controller／listener／timer／admission／登録、core／source／claim／予約、dispatch／readerより前に拒否する案である。module importそのものの評価・intrinsic捕捉・既存static登録を0にする意味ではなく、そちらはR01〜06の閉包不在検査が扱う。
+### 副作用前拒否の採用方針（未実装）
 
-複合不正入力では現在の先行エラーからinvalid_inputへ優先順位が変わり得る。synthetic key＋既abort、invalid snapshot／input、投げるpolicy provider等を個別に記録し、元理由を維持したという表現にしない。synthetic keyの有無を見る処理自体がProxy trapやgetterを起動しないかはC04／05の未選択事項を解消してから固定する。
+採用案P（C02〜04）は「既に生成したrunを止める」ではなく、options形状の安全な確認後、snapshot／oauth列挙・policy provider／時計呼出し、input検査、fake bytes取得／copy、session／controller／listener／timer／admission／登録、core／source／claim／予約、dispatch／readerより前に拒否する案である。module importそのものの評価・intrinsic捕捉・既存static登録を0にする意味ではなく、そちらはR01〜06の閉包不在検査が扱う。
+
+複合不正入力では現在の先行エラーからinvalid_inputへ優先順位が変わり得る。synthetic key＋既abort、invalid snapshot／input、投げるpolicy provider等を個別に記録し、元理由を維持したという表現にしない。synthetic keyの有無を見る処理自体がProxy trapやgetterを起動しないかはC05-Bの外側Proxy事前拒否と採用案Pを前提に、将来の対照で個別に確認する。
 
 将来の拒否試験では、C/G/P=0だけで生成前停止を証明しない。個別の生成／clock／provider／copy／予約／dispatch観測と、既存Pのactive／principal／診断不変・後続fresh成功を組み合わせる。観測器のために新friend・公開writer・本番台帳取得口は追加せず、同一性と副作用の追加受入条件は元caseの直接assertionから分離する。
+
+[C02〜04／06の採用記録 draft-0.2](BEST_PRACTICE_RELEASE_AP03_C02_C04_C06_COMPATIBILITY_REVIEW.md)に、外側受付優先の同期拒否（案P）、型・旧名・module不在を分けるC06の互換方針を記録した。採用は方針のみ。AP02での具体的な撤去対象、実装・配布は未承認。
 
 ## 5 入口caseと失われ得る保証の引渡し
 
@@ -100,25 +104,25 @@ K06は「何も生成しない入口」ではない。新規session・同owner�
 |---|---|---|
 | A23-V01 | 同revisionの撤去候補R01〜08を定義・参照・JS／宣言／map・static／reexport／dynamic edgeに対応付け、本番許可依存と禁止閉包を別表へ固定 | 未解決動的edge・共有writer・所有不明slotはUnknown／停止。名前の不在だけで合格しない |
 | A23-V02 | PのK01〜06正対照。空出力buildと実tarball内の通常import・source／Permit／worker／省略時summaryを確認 | 必要runtime kernel欠落なら失敗。起動不能をfriend不在成功にしない。全体通常並列・終了確認はAP06の別gate |
-| A23-V03 | C02〜05の型／JS入力matrix、key存在・accessor非実行・複合不正の優先順、同期throwとPromise観測、拒否前後のP非干渉 | C05／07等の仕様未選択・生成点観測不足なら副作用前拒否を主張せず停止。旧期待値を弱めない |
-| A23-V04 | source第3引数・2取得口・claimの型／実体不在とcallback不実行、通常初期sourceの同owner binding・停止／closeを対で確認 | 第3引数の受付仕様が未選択のまま型削除だけでJS拒否とみなす、新installerで代替する場合は不合格。明示undefined等の扱いはC07の承認済み仕様と照合する |
+| A23-V03 | C02〜05の型／JS入力matrix、key存在・accessor非実行・複合不正の優先順、同期throwとPromise観測、拒否前後のP非干渉 | 採用した例外順との差・生成点観測不足なら副作用前拒否を主張せず停止。旧期待値を弱めない |
+| A23-V04 | source第3引数・2取得口・claimの型／実体不在とcallback不実行、通常初期sourceの同owner binding・停止／closeを対で確認 | 型削除だけでJS拒否とみなす、新installerで代替する場合は不合格。明示undefined等の扱いはC07の承認済み仕様と照合する |
 | A23-V05 | B-03のP/U/D/I/H区分、FA01〜24／NC01〜08、PK01〜03の旧fixtureと新artifact、元case／故障位置／assertion／残差を個別に記録 | LM03・専用build・無bridge移行・UN62の保証不足、AP01／04／05未承認を残し、Pのprivate保証回復へ加算しない |
 | A23-V06 | EF3-N01〜09とB-03の負対照。alias／shim／動的復活、stale JS／宣言／map、fake同梱／受付復活、必要kernel欠落を各独立変異で検出 | 正常対照0・各変異で意図した理由の非0を分離。単なるimport失敗・検査未起動でkillと数えない |
 
 停止／失敗時は「撤去前の旧仕様と旧試験を保持して再設計」が基本で、未確認を消すためのskip・期待値変更・deadline緩和を行わない。承認後の候補patchにも失敗位置・所有者・未確認resource／custody・最初の診断を引き継ぐ。release notesの非提供説明を、通常経路の責務放棄やcleanup confirmedの代用にしない。
 
-## 7 個別承認票と実施順（全票未承認）
+## 7 個別承認票と実施順（D03／D04・C06の互換方針のみ採用）
 
 | ID | 判断する範囲 | 未承認／未確定事項と前提 |
 |---|---|---|
 | A23-D01 | AP02：R01〜03の取得／登録／callback閉包撤去 | 対象revision・全参照・固定root内で残す結合、T01〜05の失われるassertionを固定。実施承認者・日付・対象patchは未記入 |
 | A23-D02 | AP02：R04〜08のfake実行・module依存・artifact分離 | LM03／bridge分離とB-03の保証不足を解消または該当APへ差分提示。新friend／同一台帳共有による救済は不可 |
-| A23-D03 | AP03：C01〜04のsynthetic overload廃止・同期invalid_input・優先順 | 正常prepared Promiseを失う範囲、型／deep import利用者影響とrelease notesを提示。candidate仕様の受容は未承認 |
-| A23-D04 | AP03：C05の継承／Proxy／prototypeとC07のJS第3引数 | 詳細仕様は未選択。明示undefined等のvariant、拒否点と副作用観測を固定してから承認。勝手にstrict化・黙認へ寄せない |
+| A23-D03 | AP03：C01〜04のsynthetic overload廃止・同期invalid_input・優先順 | 案P採用。複合不正でも外側受付を優先し、旧prepared Promise／後段拒否を返さない。C06の方針は別記し、具体的な撤去対象・候補patch・検証は未実施 |
+| A23-D04 | AP03：C05の継承／Proxy／prototypeとC07のJS第3引数 | C05-B＋C07-B採用。候補patch・出力JSでの拒否位置・副作用非介在・通常経路の検証と、関連するD03／C06の採用方針に基づく候補検証は未実施。実装・撤去を承認しない |
 | A23-D05 | AP01／04／05との接続 | 非提供と保証低下、rejectとunknown／withheld、旧case削除と入口不在検査への仕様変更を別票にする。通常K保証への影響不明ならリリース停止 |
 | A23-D06 | 実施・検証・配布の順序 | 上記の仕様／残差承認とは別に、対象patchの実装・旧試験切替・build変更／process対照を承認後に実施。AP06の版／最終候補検証／公開はさらに別承認 |
 
-各票は「基準revision／対象patch・影響case／artifact・旧assertion・提案する変更／失う保証・維持K条件・未確認／残差owner・回復条件・検証結果・承認者／日付／除外条件」を必須欄とする。現在は承認者・日付・決定・対象patch・実施結果すべて未記入で、文書やコミットの存在を承認としない。
+各票は「基準revision／対象patch・影響case／artifact・旧assertion・提案する変更／失う保証・維持K条件・未確認／残差owner・回復条件・検証結果・承認者／日付／除外条件」を必須欄とする。D03／D04とC06は互換方針だけ採用済み。他票の承認、対象patch、実施結果は未記入で、文書やコミットの存在を承認としない。
 
 順序は、(1) T01〜06と残差台帳を使って旧assertion／閉包利用の対応を確定、(2) D03／04で入力・例外・引数仕様を選択する材料を揃える、(3) D01／02とAP01／04／05を個別審査、(4) 別承認後にEF-03C／D・B-03の実装／切替／正負対照、(5) 候補commitの最終検証とAP06、とする。準備を併行してもgateを飛ばさない。
 
