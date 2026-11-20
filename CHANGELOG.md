@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.16.1] — 2026-11-20
+
+Security-only patch on top of 1.16.0. It contains no other changes from the development branch.
+
+### Security
+
+- **Dependency updates (transitive via `@modelcontextprotocol/sdk`).** `hono` 4.13.19 (`csrf()` not checking hyperlink-auditing `text/ping` requests, `validator('form')` skipping multipart requests with extra parameters, `mount()` and RegExpRouter middleware bypasses, and a low-severity `css` helper HTML injection; GHSA-46wx-v44x-9hh2, GHSA-4h7h-rv7c-7m2v, GHSA-4m76-xfj5-7975, GHSA-h7mg-cq63-vhpq, GHSA-3gg2-335m-rxc6), `@hono/node-server` 2.1.9 (backslash parsed as a path separator, unhandled `ECONNRESET` during WebSocket upgrade, `serveStatic` double decoding; GHSA-jpvv-r467-5p4w, GHSA-qv5m-9pm6-hqp3, GHSA-rmxm-3fg6-px4f) and `qs` 6.17.1 (`stringify` comma-format denial of service, GHSA-6pq8-jhm2-2vcw). All moderate or low. The server does not use the affected Hono helpers directly; the HTTP transport uses `node:http` with the SDK's Streamable HTTP transport and binds to `127.0.0.1` by default.
+- **Raised lower bounds.** The `overrides` for `hono`, `@hono/node-server` and `qs` now start at the first fixed releases, so regenerating the lockfile cannot select the affected versions.
+- Development-only: `eslint` 10.15.0 and `@typescript-eslint` 8.73.0, bringing `minimatch` 11.0.9 (globparts denial of service, GHSA-g3hv-75wg-m249). `npm audit` reports no known vulnerabilities; the native `r2-outer` Cargo.lock has none per OSV (an informational unmaintained notice for `chrono` remains).
+
 ## [1.16.0] — 2026-10-25
 
 Adds the read-only best-practice review PoC and its explicit opt-in rules. The review is partial by design: it reports unverified, low-confidence candidates for a bounded subset of an Update Set, and zero or partial findings never establish safety or compliance. Includes the 1.15.1 security fixes.
