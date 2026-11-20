@@ -8,9 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.16.2] — 2026-11-20
+
+Republishes 1.16.1 with the intended package contents. The source is identical to 1.16.1; only the version differs.
+
+### Fixed
+
+- **Packaging: the npm tarball published as 1.16.1 contained unreleased development-branch files.** The build output directory was overwritten by a development-branch build while the release was being published, so the 1.16.1 tarball (617 files) added 252 files under `dist/review/` and `dist/servicenow/` (including `dist/servicenow/review-kernel/`), among them development-only fixture modules that are not part of any release. The code reachable from the package entry points was identical to the 1.16.1 release build, and no credentials were found in the added files. The added modules could still be loaded by importing their paths directly, because the package has no `exports` map. 1.16.2 is built from the release source only (365 files). 1.16.1 is deprecated; use 1.16.2.
+
 ## [1.16.1] — 2026-11-20
 
-Security-only patch on top of 1.16.0. It contains no other changes from the development branch.
+Security-only patch on top of 1.16.0. It contains no other changes from the development branch. The npm tarball for this version accidentally included unreleased development-branch files; see 1.16.2.
 
 ### Security
 
