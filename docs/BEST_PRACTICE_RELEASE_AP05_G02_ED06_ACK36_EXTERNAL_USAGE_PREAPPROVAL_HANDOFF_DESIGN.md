@@ -4,7 +4,7 @@ Version: release-ap05-g02-ed06-ack36-external-usage-preapproval-handoff-draft-0.
 
 Status: **横断整理案のみ。実資料は未指定・未閲覧、証拠・承認欄は未記入、外部利用はUnknown。ED06の処遇は未選択・未承認、閲覧は未承認・閲覧0。候補revision・digest・観測手段は未確定。数値・保全方式・保全先は未承認。G02未充足、SL01は起動0。**
 
-[不足証拠・確認順序 draft-0.1](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_PREAPPROVAL_EVIDENCE_CHECKLIST.md)の段階1〜4を、[個別承認票案 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_LIMITED_REVIEW_APPROVAL_DESIGN.md)の証拠欄と閲覧前判定へ対応付ける。読み取り基準 `781c9b6` はrepo内の文書の参照であり、外部資料や製品候補の版ではない。このMDは対象資料の選定・提供・閲覧・記録／保持や処遇を承認しない。
+[不足証拠・確認順序 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_PREAPPROVAL_EVIDENCE_CHECKLIST.md)の段階1〜4を、[個別承認票案 draft-0.2](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_LIMITED_REVIEW_APPROVAL_DESIGN.md)の証拠欄と閲覧前判定へ対応付ける。読み取り基準 `781c9b6` はrepo内の文書の参照であり、外部資料や製品候補の版ではない。このMDは対象資料の選定・提供・閲覧・記録／保持や処遇を承認しない。
 
 ## 1 個別承認票に渡せる証拠と結合条件
 

@@ -1,8 +1,10 @@
 # AP05 G02：ED06／ACK-36の回復先行案・受入条件
 
-Version: release-ap05-g02-ed06-ack36-recovery-acceptance-draft-0.4 / Date: 2026-11-20。
+Version: release-ap05-g02-ed06-ack36-recovery-acceptance-draft-0.5 / Date: 2026-11-20。
 
 Status: **設計のみ。ED06の処遇は未選択・未承認。回復は未確認、G02は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準 `99066f7` は文書・現行source／旧testの読取り用で、製品候補ではない。
+
+draft-0.5のレビュー修正：レビュー修正の基準HEADは`a4e680a`（修正時のHEADは`a4e680a`）。`a4e680a`で追加されたED06の後続17本は主に前段の文書を参照し、コミット済みの文書からの入口がなかった。§4の末尾に、個別処遇の着手レビューと旧PK01の隔離再現・実行前承認票案への参照を加え、17本すべてをたどれるようにした。3対照・固定境界・受渡し欄・停止条件は変更していない。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`ee51ea7`（修正時のHEADは`ee51ea7`）。draft-0.3の修正記録は12本の間の後の文書への参照を1件としていたが、これは`781c9b6`時点の数で、draft-0.2の基準HEAD`41c897a`では確認手順案から段階1〜4への4件を加えた5件だった。draft-0.2の修正記録の括弧書きに4件を補記した。12本の外からの入口がなかったという到達性の結論、§4末尾の参照段落、3対照・固定境界・受渡し欄・停止条件は変更していない。
 
@@ -47,3 +49,5 @@ draft-0.2のレビュー修正：レビュー修正の基準HEADは`41c897a`（�
 3対照の必要証拠が揃って初めて回復先行案を再審査できる。Hの保持はPで旧synthetic返却を提供する意味ではなく、Pの両対照だけでもHの保証を代替しない。いずれかが欠ける、通常K・共有責務が不明、または候補での実施方法が未承認なら、旧試験と通常経路を保持し、**ED06は未選択・未承認、G02は未充足、SL01は起動0**のままとする。
 
 本書の後の検討は、[未変更候補の実bind・登録結合欠失の観測契約](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_UNCHANGED_CANDIDATE_BIND_OBSERVATION_DESIGN.md)→[登録結合欠失の既存境界・観測非介在の静的照合](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_BIND_BOUNDARY_STATIC_REVIEW_DESIGN.md)→[欠失対照が見つからない場合の処遇審査条件](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_NO_CONTROL_DISPOSITION_REVIEW_DESIGN.md)→[非提供審査前の経路分離・旧Promise影響の静的照合](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_NON_PROVISION_BOUNDARY_REVIEW_DESIGN.md)→[旧Promise利用影響の確認範囲・外部説明案](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_PROMISE_IMPACT_NOTICE_DESIGN.md)→[外部利用影響の限定確認・個別承認票案](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_LIMITED_REVIEW_APPROVAL_DESIGN.md)→[資料候補・閲覧前確認条件](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_MATERIAL_PRECHECK_DESIGN.md)→[閲覧承認前の不足証拠・確認順序](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_EXTERNAL_USAGE_PREAPPROVAL_EVIDENCE_CHECKLIST.md)の順に続き、段階1〜4の様式は最後の手順案から参照する。いずれも設計・様式案で、ED06の処遇の選択、回復の認定、閲覧・外部利用の承認ではなく、本節の停止条件を変更しない。
+
+その後の検討は二つの入口から参照できる。[個別処遇の着手レビュー](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_DISPOSITION_READINESS_REVIEW.md)からは閲覧承認前の引継ぎへ、[旧PK01の隔離再現・実行前承認票案](BEST_PRACTICE_RELEASE_AP05_G02_ED06_ACK36_LEGACY_PK01_ISOLATED_REPRO_APPROVAL.md)からは、その前段の合成・Docker隔離の対照結果、旧compiled保持、AP02 patch審査の引継ぎ、代替受入案と複合証拠の個別審査、候補の差分・範囲・経路、外部資料に依存しない証拠取得案、開発用の正対照・owner登録対照、通常境界の再審査、リリース前進・承認引継ぎへたどれる。いずれも処遇の選択、回復の認定、候補の起動や公開の承認ではなく、本節の停止条件を変更しない。

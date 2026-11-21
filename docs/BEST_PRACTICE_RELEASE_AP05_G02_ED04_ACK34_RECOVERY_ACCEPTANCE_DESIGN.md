@@ -1,8 +1,10 @@
 # AP05 G02：ED04／ACK-34の回復先行案・受入条件
 
-Version: release-ap05-g02-ed04-ack34-recovery-acceptance-draft-0.1 / Date: 2026-11-20。
+Version: release-ap05-g02-ed04-ack34-recovery-acceptance-draft-0.2 / Date: 2026-11-20。
 
 Status: **設計のみ。ED04の処遇は未選択・未承認。回復は未確認、G02は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準 `a57400b` は文書・現行source／旧testの読取り用で、製品候補ではない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`a4e680a`（修正時のHEADは`a4e680a`）。`a4e680a`で追加された[ED04回復先行審査](BEST_PRACTICE_RELEASE_AP05_G02_ED04_ACK34_RECOVERY_BOUNDARY_REVIEW.md)は、コミット済みのどの文書からも参照されていなかったため、§4の末尾に参照を加えた。証拠・責務・停止条件は変更していない。
 
 [ED01〜07個別処遇案・承認票](BEST_PRACTICE_RELEASE_AP05_G02_ED_INDIVIDUAL_DISPOSITION_APPROVAL_DESIGN.md)のED04／ACK-34だけを対象に、[G02旧assertion・回復条件](BEST_PRACTICE_RELEASE_AP05_G02_OLD_ASSERTION_RECOVERY_DESIGN.md)、[NS02 N2-X07](BEST_PRACTICE_RELEASE_AP01_NS02_ACK_RELEASE_GUARANTEE_REVIEW.md)、[G01のED04](BEST_PRACTICE_RELEASE_AP05_G01_ENTRY_EVIDENCE_RECONCILIATION_DESIGN.md)へ結ぶ。`53eff59` の[C05／C07採用記録](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md)は入口仕様の根拠。撤去対象・実装・旧保証の処遇を承認せず、旧caseの正規分類は未対応のまま。
 
@@ -47,3 +49,5 @@ Status: **設計のみ。ED04の処遇は未選択・未承認。回復は未確
 - **別々に記録する証拠**：Hの3 variantの元観測と同sessionのpayload=1、PのJS引数／宣言・同期拒否と正対照、Pの独立した会計継続。元case・入力／注入・判定位置・採用根拠・対象artifactを記録する。Pの入口不在やDの別rootの値成功はHで元claimが拒否した保証の代替ではない。
 - **責務と許可**：source／session ownerはC07境界と通常結合、canonical accounting ownerは元sessionの会計・停止と解放、AP05旧試験担当は元位置・期待値の保持。人の担当・期限は未割当。候補を[段階別pin](BEST_PRACTICE_RELEASE_AP05_G03_CANDIDATE_PIN_DESIGN.md)、終端と未確認時の保全を[G04](BEST_PRACTICE_RELEASE_AP05_G04_EXECUTION_CUSTODY_DESIGN.md)に結ぶが、候補revision・digestは未確定、数値・観測手段・保全方式・保全先は未承認。個別処遇、AP02実装、候補検証、旧試験切替は別承認。
 - 3層の証拠のいずれかが不足する、通常会計を同sessionで維持できない、または実施方法が未承認なら、元保証を回復済みにせず審査保留。**ED04の処遇は未選択・未承認、G02は未充足、SL01は起動0**のままとする。
+
+本書の後の審査は[ED04回復先行審査：C07-Bと拒否後の同session会計](BEST_PRACTICE_RELEASE_AP05_G02_ED04_ACK34_RECOVERY_BOUNDARY_REVIEW.md)にある。審査の記録で、ED04の処遇の選択や回復の認定ではなく、本節の停止条件を変更しない。
