@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- AU-BR-005 no longer treats indirect use of `current.setAbortAction` as "no abort call". Extracted method references, `.call`/`.apply`/`.bind`, comma-operator calls and destructuring (named, computed or rest) of `current` now mark the abort analysis unresolved, so the review cannot complete as clear. Direct `current.setAbortAction(...)` calls and ordinary field reads are unchanged.
+
 ### Added
 
 - Explicit BR-only `AU-QRY-002` review of full-text query preconditions on locally constructed GlideRecord/GlideRecordSecure receivers. Distinguishes reserved-name two-argument `addQuery` from fixed one-argument `addEncodedQuery` term boundaries, not substrings in search values or ordinary LIKE/CONTAINS searches. Typed index-setting and per-construction follow-ups retain index/search settings and encoded-query validity as unverified; no query execution, index creation or automatic rewrite. Dynamic/mutated/escaping receivers and unsupported query forms remain unresolved. Defaults/budgets unchanged; opt-in ruleset `bp3-0.15`; synthetic verification only.
