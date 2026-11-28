@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-11-28
+
+Adds six explicit opt-in review rules and fixes AU-BR-005. Built from the 1.16.2 release line; it does not include the unreleased development-branch work.
+
 ### Added
 
 - Explicit BR-only `AU-QRY-002` review of full-text query preconditions on locally constructed GlideRecord/GlideRecordSecure receivers. Distinguishes reserved-name two-argument `addQuery` from fixed one-argument `addEncodedQuery` term boundaries, not substrings in search values or ordinary LIKE/CONTAINS searches. Typed index-setting and per-construction follow-ups retain index/search settings and encoded-query validity as unverified; no query execution, index creation or automatic rewrite. Dynamic/mutated/escaping receivers and unsupported query forms remain unresolved. Defaults/budgets unchanged; opt-in ruleset `bp3-0.15`; synthetic verification only.
